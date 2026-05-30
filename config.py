@@ -33,7 +33,7 @@ COMMISSION = 0.0
 # ---------------------------------------------------------------------------
 # Time window
 # ---------------------------------------------------------------------------
-# Design doc: "expect ~2003–present for most names". END_DATE=None means "today".
+# Design doc: "expect ~2015–present for most names". END_DATE=None means "today".
 START_DATE = "2015-01-01"
 END_DATE: str | None = None
 
@@ -49,19 +49,19 @@ BIST100_INDEX_TICKER = "XU100.IS"
 # Phase-1 (index) work uses BIST100_INDEX_TICKER.
 # Phase-2 (single names) uses BIST100_CONSTITUENTS below.
 #
-# This is a curated list of well-known BIST100 names — sufficient for M1
-# (pipeline smoke test on BIST100 + 5 stocks) and for early single-name work.
-# TODO: replace with the full official current BIST100 membership before the
-# Phase-2 walk-forward. The course brief says we accept survivorship bias on
-# the *current* membership snapshot.
+# Source of truth: data/universe/bist100.txt, written by
+# `python -m src.data.fetch_universe` (one-shot Borsa Istanbul snapshot;
+# the course brief accepts survivorship bias on *current* membership).
+# If the file is missing we fall back to the curated subset below so the
+# pipeline still imports cleanly on a fresh checkout.
 #
-# TODO (later, do not implement yet): all XU100 names will be tagged by
-# sector (banks, holdings, transport, energy, industrials, etc.) so that
-# Phase-2 results can be sliced and aggregated per-sector. The grouping
-# comments below are placeholders for that future taxonomy — they are NOT
-# the canonical sector codes and should not be relied on programmatically
-# until the proper sector mapping is added.
-BIST100_CONSTITUENTS: list[str] = [
+# TODO (later, do not implement yet): tag all XU100 names by sector
+# (banks, holdings, transport, energy, industrials, etc.) for per-sector
+# Phase-2 aggregation. The grouping comments in the fallback list are
+# placeholders, not the canonical sector codes.
+_BIST100_FILE = DATA_DIR / "universe" / "bist100.txt"
+
+_FALLBACK_CONSTITUENTS: list[str] = [
     # Banks
     "AKBNK.IS", "GARAN.IS", "ISCTR.IS", "YKBNK.IS", "HALKB.IS", "VAKBN.IS",
     # Holdings / conglomerates
@@ -83,6 +83,20 @@ BIST100_CONSTITUENTS: list[str] = [
     # Mining
     "TRALT.IS", "TRMET.IS",
 ]
+
+
+def _load_universe() -> list[str]:
+    if not _BIST100_FILE.exists():
+        return _FALLBACK_CONSTITUENTS
+    tickers: list[str] = []
+    for line in _BIST100_FILE.read_text().splitlines():
+        s = line.strip()
+        if s and not s.startswith("#"):
+            tickers.append(s)
+    return tickers or _FALLBACK_CONSTITUENTS
+
+
+BIST100_CONSTITUENTS: list[str] = _load_universe()
 
 # Five-name subset used for the M1 smoke test.
 SMOKE_TICKERS: list[str] = [

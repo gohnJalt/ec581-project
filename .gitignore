@@ -6,9 +6,11 @@ __pycache__/
 
 data/
 results/
+report/
 
 .idea/
 .vscode/
+.claude/
 
 progress.md
 CLAUDE.md

@@ -22,6 +22,13 @@ Examples:
 COMMANDS AND OPTIONS
 --------------------
 
+universe
+    Refresh data/universe/bist100.txt from Borsa Istanbul (one-shot snapshot
+    of current BIST100 membership; config.BIST100_CONSTITUENTS reads from it).
+    Wraps: python -m src.data.fetch_universe
+      --url URL            override the source page
+      --dry-run            print parsed tickers and exit (no file write)
+
 data
     Build the data pipeline: ingest -> clean -> panel.
     Wraps: python -m src.data.build
@@ -148,6 +155,15 @@ def _add_strategy_opts(sp: argparse.ArgumentParser) -> None:
     sp.add_argument("--window", type=int, default=None)
 
 
+def cmd_universe(ns: argparse.Namespace) -> int:
+    args: list[str] = []
+    if ns.url is not None:
+        args += ["--url", ns.url]
+    if ns.dry_run:
+        args.append("--dry-run")
+    return _forward("src.data.fetch_universe", args)
+
+
 def cmd_data(ns: argparse.Namespace) -> int:
     args: list[str] = []
     if ns.smoke:
@@ -215,6 +231,13 @@ def build_parser() -> argparse.ArgumentParser:
         description="Centralized CLI for the EC581 Trend Following project.",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("universe", help="Refresh BIST100 constituents from Borsa Istanbul")
+    sp.add_argument("--url", type=str, default=None,
+                    help="override the source page (default: Borsa Istanbul)")
+    sp.add_argument("--dry-run", action="store_true",
+                    help="print parsed tickers and exit without writing")
+    sp.set_defaults(func=cmd_universe)
 
     sp = sub.add_parser("data", help="ingest -> clean -> panel")
     sp.add_argument("--smoke", action="store_true")

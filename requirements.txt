@@ -8,3 +8,4 @@ pyarrow>=15
 tqdm>=4.66
 yfinance>=0.2.50
 pypdf>=5.0
+lxml>=6.1.0
