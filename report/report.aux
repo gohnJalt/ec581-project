@@ -1,0 +1,115 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{3}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Project Scope}{3}{subsection.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Why Trend Following?}{3}{subsection.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Why Low-Frequency Filters?}{3}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Theoretical Background}{4}{section.2}\protected@file@percent }
+\newlabel{sec:theory}{{2}{4}{Theoretical Background}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}The Hodrick--Prescott Filter}{4}{subsection.2.1}\protected@file@percent }
+\newlabel{eq:hp}{{1}{4}{The Hodrick--Prescott Filter}{equation.2.1}{}}
+\newlabel{eq:hp-closed}{{2}{4}{The Hodrick--Prescott Filter}{equation.2.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Causality caveat.}{4}{equation.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}LOWESS Smoothing}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Exponential Moving Average}{4}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Strategies}{4}{section.3}\protected@file@percent }
+\newlabel{sec:strategies}{{3}{4}{Strategies}{section.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Four trend extractors. All produce a discrete $\pm 1$ trend state.}}{4}{table.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Trade rules (common to all variants).}{5}{table.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Position sizing --- full capital deployment.}{5}{table.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Why HP is designated the primary strategy.}{5}{table.caption.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Regime Filter (Phase 2)}{5}{subsection.3.1}\protected@file@percent }
+\newlabel{sec:regime}{{3.1}{5}{Regime Filter (Phase 2)}{subsection.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Methodology}{5}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Data and Universe}{5}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Currency redenomination and corporate-action fix.}{6}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Causal Wrappers for HP and LOWESS}{6}{subsection.4.2}\protected@file@percent }
+\newlabel{sec:causal-wrappers}{{4.2}{6}{Causal Wrappers for HP and LOWESS}{subsection.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Backtest Mechanics}{6}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Performance Metrics}{6}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Hyperparameter Optimisation}{6}{subsection.4.5}\protected@file@percent }
+\newlabel{sec:opt}{{4.5}{6}{Hyperparameter Optimisation}{subsection.4.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Statistical Significance: Monte-Carlo Bootstrap}{7}{subsection.4.6}\protected@file@percent }
+\newlabel{sec:mc}{{4.6}{7}{Statistical Significance: Monte-Carlo Bootstrap}{subsection.4.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.7}Portfolio Aggregation}{7}{subsection.4.7}\protected@file@percent }
+\newlabel{sec:portfolio-method}{{4.7}{7}{Portfolio Aggregation}{subsection.4.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Results}{7}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{5}{7}{Results}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Phase 1 -- BIST100 Index Sweep}{7}{subsection.5.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Phase-1 winners on the BIST100 Index. The strategies underperform buy-and-hold on absolute return but cut drawdown by 15--20~percentage points.}}{7}{table.caption.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Reading.}{7}{table.caption.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Phase 1 -- Monte-Carlo Significance}{8}{subsection.5.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Run-length-bootstrap Monte-Carlo Sharpe $p$-values, $N{=}1000$. S2/S3/S4 reject random at $p<0.005$. S1 is only marginal at the 5\% level --- consistent with the Harris--Yilmaz finding that LF-filter direction out-performs MA crossover.}}{8}{table.caption.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Phase 2 -- Per-Stock Full History}{8}{subsection.5.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Phase-2 per-stock summary on 29 redenomination-adjusted BIST100 constituents.}}{8}{table.caption.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Reading.}{8}{table.caption.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Phase 2 -- Per-Stock Monte Carlo}{8}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Phase 2 -- Equal-Weight Portfolio}{8}{subsection.5.5}\protected@file@percent }
+\newlabel{sec:portfolio-results}{{5.5}{8}{Phase 2 -- Equal-Weight Portfolio}{subsection.5.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Per-stock MC Sharpe $p$-values, $N{=}1000$, base variant. Regime variant is intentionally not MC-tested because the gated-entry / sticky-flat logic is path-dependent and would be mis-stated by the fast simulator.}}{9}{table.caption.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Equal-weight cross-sectional portfolio metrics. The portfolio Sharpe ($\sim $0.9 for HP, $\sim $1.05 for LOWESS) is roughly $2\times $ the mean per-ticker Sharpe ($\sim $0.42--0.46) --- the diversification benefit of cross-sectional aggregation.}}{9}{table.caption.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Reading.}{9}{table.caption.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Phase 2 -- Walk-Forward (S3 HP)}{9}{subsection.5.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Walk-forward summary, S3~HP, 29~tickers.}}{9}{table.caption.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Parameter selection.}{9}{table.caption.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Best / worst tickers.}{10}{table.caption.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.7}HP vs LOWESS Head-to-Head}{10}{subsection.5.7}\protected@file@percent }
+\newlabel{sec:results-h2h}{{5.7}{10}{HP vs LOWESS Head-to-Head}{subsection.5.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Head-to-head HP vs LOWESS across every aggregation level.}}{10}{table.caption.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Verdict.}{10}{table.caption.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Findings and Discussion}{10}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Summary of Key Findings}{10}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}The Sharpe vs CAGR Trade-Off Frontier}{11}{subsection.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Risk-adjusted comparison. Only LOWESS-base produces a Sharpe ratio meaningfully above buy-and-hold; all four portfolio variants cut MDD by $\sim $35--40pp.}}{11}{table.caption.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Why the Regime Filter Underperforms on Sharpe}{11}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Comparison with Harris--Yilmaz (2008)}{11}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Improvement Ideas and Future Work}{12}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Data and Universe}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM1 -- Full official BIST100 membership.}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM2 -- Point-in-time BIST100 membership (no survivorship).}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM3 -- Adjusted-close vendor data.}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM4 -- Currency-translated returns.}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Signal Engineering}{12}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM5 -- HP + LOWESS signal ensemble.}{12}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM6 -- Adaptive $\lambda $.}{13}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM7 -- Slope magnitude, not just sign.}{13}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM8 -- HP residual as a contrarian overlay.}{13}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM9 -- Kalman / state-space trend.}{13}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Position Sizing and Risk Management}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM10 -- Volatility targeting.}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM11 -- Cross-sectional risk-parity weighting.}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM12 -- Drawdown stop-out.}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM13 -- Position-level concentration limits.}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Backtest Realism}{13}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM14 -- Transaction costs.}{13}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM15 -- Slippage model.}{14}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM16 -- Borrow availability.}{14}{subsection.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}Statistical Testing}{14}{subsection.7.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM17 -- Regime-variant per-stock MC.}{14}{subsection.7.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM18 -- Portfolio-level Monte Carlo.}{14}{subsection.7.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM19 -- Stationary block bootstrap.}{14}{subsection.7.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM20 -- White's reality check / SPA test.}{14}{subsection.7.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.6}Walk-Forward and Robustness}{14}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM21 -- LOWESS walk-forward.}{14}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM22 -- Trim the WF grid.}{14}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM23 -- Combinatorial purged cross-validation (Lopez de Prado).}{14}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM24 -- Deflated Sharpe ratio.}{14}{subsection.7.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.7}Engineering and Reproducibility}{15}{subsection.7.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM25 -- Feature parquet cache.}{15}{subsection.7.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM26 -- Restore the venv.}{15}{subsection.7.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM27 -- Git initialisation.}{15}{subsection.7.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM28 -- Test coverage for causality.}{15}{subsection.7.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.8}Reporting Extensions}{15}{subsection.7.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM29 -- Per-sector slice.}{15}{subsection.7.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM30 -- Regime-conditional return tables.}{15}{subsection.7.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{IM31 -- Drawdown attribution.}{15}{subsection.7.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Limitations}{15}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{16}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{16}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {A}Code Structure}{17}{appendix.A}\protected@file@percent }
+\newlabel{app:code}{{A}{17}{Code Structure}{appendix.A}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Reproducibility}{18}{appendix.B}\protected@file@percent }
+\newlabel{app:repro}{{B}{18}{Reproducibility}{appendix.B}{}}
+\gdef \@abspage@last{18}

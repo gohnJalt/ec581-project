@@ -1,0 +1,1143 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{multicol}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\usepackage{authblk}
+\usepackage{siunitx}
+\usepackage{titlesec}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue!60!black,
+    urlcolor=blue!60!black,
+    pdftitle={Trend Following on BIST100: A Low-Frequency Momentum Strategy},
+    pdfauthor={EC581 Project}
+}
+
+\sisetup{
+    detect-all,
+    group-separator={,},
+    group-minimum-digits=4
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    backgroundcolor=\color{gray!8},
+    frame=single,
+    rulecolor=\color{gray!30},
+    keywordstyle=\color{blue!60!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    showstringspaces=false,
+    language=Python
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small EC581 -- Trend Following Project}
+\lhead{\small BIST100 Low-Frequency Momentum}
+\rfoot{\thepage}
+
+\titleformat{\section}{\Large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.5em}{}
+
+% --- Title ------------------------------------------------------------------
+\title{\textbf{A Low-Frequency Momentum Trading Strategy \\
+\large on Turkish Equities (BIST100)} \\[0.5em]
+\large EC581 -- Algorithmic Trading and Quantitative Strategies \\[0.2em]
+\normalsize Project Section 4: Trend Following}
+
+\author[]{Bogazici University -- Course Project}
+\affil[]{Instructor: Dr.~Ayhan Y\"uksel}
+\date{May 2026}
+
+% ============================================================================
+\begin{document}
+% ============================================================================
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent We design, implement and evaluate a long/short trend-following strategy for
+Turkish equities (BIST100) inspired by Harris and Yilmaz (2008), \emph{A Momentum
+Trading Strategy Based on the Low Frequency Component of the Exchange Rate}.
+Four trend extractors --- EMA crossover (S1), EMA direction (S2), Hodrick--Prescott
+filter direction (S3), and LOWESS direction (S4) --- are tuned in-sample on the
+BIST100 Index (Phase~1) and then deployed on 29 constituent stocks (Phase~2) with
+an optional BIST100-HP regime gate. Statistical significance is established with a
+run-length-matched Monte-Carlo bootstrap ($N{=}1000$). The Hodrick--Prescott
+direction rule (S3) is retained as the principled primary strategy by virtue of its
+theoretical alignment with Harris--Yilmaz; LOWESS (S4) is carried as the
+\emph{empirical} benchmark and reported head-to-head.
+On the BIST100 Index over 23.3~years, S3~HP reaches Sharpe $0.82$ ($p<0.001$
+vs.~matched-random) and S4~LOWESS reaches Sharpe $0.88$ ($p<0.001$). The
+equal-weight 29-stock portfolio gives S3~HP a Sharpe of $0.90$ (CAGR $15.3\%$,
+MDD $-26.8\%$) and S4~LOWESS a Sharpe of $1.05$ (CAGR $18.2\%$, MDD $-28.5\%$),
+compared to BIST100 buy-and-hold Sharpe $0.92$ (CAGR $23.5\%$, MDD $-63.4\%$).
+The regime filter consistently acts as a \emph{variance reducer} rather than a
+Sharpe enhancer. We close with a detailed methodological self-critique and a
+set of concrete improvement directions covering universe construction, signal
+combination, position sizing, transaction-cost realism, and statistical testing.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Introduction}
+% ============================================================================
+
+\subsection{Project Scope}
+
+This report documents the project for Section~4 (\emph{Trend Following}) of the
+EC581 course brief at Bogazici University. The anchoring article is Harris and
+Yilmaz (2008/2009), \emph{A Momentum Trading Strategy Based on the Low Frequency
+Component of the Exchange Rate}, published in the \emph{Journal of Banking and
+Finance}. The brief mandates the following constraints, all of which are
+respected:
+
+\begin{itemize}[leftmargin=1.2em,itemsep=2pt]
+    \item Backtest engine: \textbf{Backtrader}.
+    \item Initial capital: \textbf{1{,}000{,}000~TL}.
+    \item Per-trade notional: \textbf{100{,}000~TL}, allocated via the
+          course-supplied \texttt{FixedCashSizer}.
+    \item Commissions and slippage: \textbf{zero}.
+    \item Order type (base strategy): \texttt{bt.Order.Market}.
+    \item Frequency: \textbf{daily} bars.
+    \item Universe Phase~1: \textbf{BIST100 Index} for hyperparameter selection.
+    \item Universe Phase~2: \textbf{BIST100 constituents} (current membership;
+          survivorship bias acknowledged but uncorrected per brief).
+    \item Significance: \textbf{Monte-Carlo $p$-value} on the Sharpe ratio
+          against random strategies matching trade frequency, holding period and
+          long/short proportion, with $N\!\approx\!1000$.
+\end{itemize}
+
+The project is to (i)~implement the four trend extractors described in
+\S\ref{sec:strategies}, (ii)~tune each on the index, (iii)~pick a primary,
+(iv)~deploy it on individual stocks both in a base and a regime-gated form, and
+(v)~test statistical significance throughout.
+
+\subsection{Why Trend Following?}
+
+Classical efficient-market theory predicts no exploitable serial dependence in
+returns. In practice, persistent autocorrelation in returns has been documented
+across asset classes and decades (Moskowitz, Ooi and Pedersen, 2012; Asness,
+Moskowitz and Pedersen, 2013). Behavioural explanations --- anchoring,
+under-reaction to news, herding --- and structural ones --- slow capital flows,
+leverage cycles, central-bank reaction functions --- all predict that prices
+adjust to information gradually rather than instantaneously. A strategy that is
+\emph{long when the slow trend is up and short when it is down} aims to harvest
+that drift.
+
+\subsection{Why Low-Frequency Filters?}
+
+Harris and Yilmaz~(2008) decompose daily FX series into a low-frequency
+component (extracted with the Hodrick--Prescott filter from business-cycle
+econometrics) and a high-frequency residual. Their three operationally useful
+claims are:
+
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+    \item The low-frequency component is \emph{highly persistent}: once its slope
+          flips sign, it tends to keep that sign for many periods.
+    \item Rules based on the \textbf{sign of the change in the low-frequency
+          component} outperform classical moving-average crossover rules
+          out-of-sample across major currency pairs.
+    \item Low-pass filters, while non-causal during fitting, produce smoother
+          right-edge estimates than moving averages of comparable lag, reducing
+          whipsaws.
+\end{enumerate}
+
+We test these claims on Turkish equities.
+
+% ============================================================================
+\section{Theoretical Background}\label{sec:theory}
+% ============================================================================
+
+\subsection{The Hodrick--Prescott Filter}
+
+Given a price series $\{P_t\}_{t=1}^{T}$, the HP decomposition writes
+$P_t = \tau_t + c_t$, where $\tau_t$ is a smooth trend and $c_t$ the residual
+cycle. The trend solves
+\begin{equation}
+\widehat{\boldsymbol{\tau}} \;=\; \arg\min_{\boldsymbol{\tau}}\;
+\underbrace{\sum_{t=1}^{T}(P_t - \tau_t)^2}_{\text{fit}}
+\;+\;\lambda\,
+\underbrace{\sum_{t=2}^{T-1}\bigl((\tau_{t+1}-\tau_t)-(\tau_t-\tau_{t-1})\bigr)^2}_{\text{smoothness}},
+\label{eq:hp}
+\end{equation}
+with closed form
+\begin{equation}
+\widehat{\boldsymbol{\tau}} \;=\; (\mathbf{I} + \lambda\, \mathbf{D}^\top \mathbf{D})^{-1}\mathbf{P},
+\label{eq:hp-closed}
+\end{equation}
+where $\mathbf{D}$ is the second-difference operator. Larger $\lambda$ implies
+a smoother (slower) trend. Hodrick and Prescott (1997) recommend
+$\lambda{=}1600$ for quarterly macroeconomic data; on daily financial series
+much larger values (e.g.\ $10^4$--$10^5$) are typical.
+
+\paragraph{Causality caveat.} Equation~\eqref{eq:hp-closed} uses the
+\emph{entire} series. In a backtest at bar $t$, the historical estimate
+$\widehat{\tau}_t^{\text{full}}$ depends on future prices and is therefore
+\emph{look-ahead biased}. We address this with a rolling/expanding-window
+wrapper (Section~\ref{sec:causal-wrappers}).
+
+\subsection{LOWESS Smoothing}
+
+LOWESS (Cleveland, 1979) fits a low-degree polynomial via locally weighted
+least-squares around each target abscissa $x_t$. The weighting uses a
+tricube kernel over the nearest \texttt{frac}$\,\cdot\,T$ neighbours. As with
+HP, the bare smoother is non-causal in the same global sense: each smoothed
+point uses neighbours on both sides. The same rolling-window discipline applies.
+
+\subsection{Exponential Moving Average}
+
+The EMA of span $n$ is recursively
+\begin{equation}
+\text{EMA}_t \;=\; \alpha\,P_t + (1-\alpha)\,\text{EMA}_{t-1},\qquad \alpha = \frac{2}{n+1}.
+\end{equation}
+The EMA is \emph{causal by construction}: $\text{EMA}_t$ only depends on
+$\{P_s\}_{s\le t}$. It is therefore the natural baseline.
+
+% ============================================================================
+\section{Strategies}\label{sec:strategies}
+% ============================================================================
+
+Each strategy produces a binary trend state $T_t\in\{-1,+1\}$ on a daily bar.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}clll@{}}
+\toprule
+\textbf{\#} & \textbf{Name} & \textbf{Indicator} & \textbf{Tunable parameter(s)} \\
+\midrule
+S1 & EMA Crossover  & $\operatorname{sign}\!\bigl(\text{EMA}_{n_f} - \text{EMA}_{n_s}\bigr)$ & $(n_f, n_s)$ \\
+S2 & EMA Direction  & $\operatorname{sign}\!\bigl(\Delta \text{EMA}_n\bigr)$ & $n$ \\
+S3 & HP Direction \emph{(primary)} & $\operatorname{sign}\!\bigl(\Delta \text{HP}_\lambda(P)\bigr)$ & $\lambda$, window $W$ \\
+S4 & LOWESS Direction & $\operatorname{sign}\!\bigl(\Delta \text{LOWESS}_{\text{frac}}(P)\bigr)$ & frac, window $W$ \\
+\bottomrule
+\end{tabular}
+\caption{Four trend extractors. All produce a discrete $\pm 1$ trend state.}
+\end{table}
+
+\paragraph{Trade rules (common to all variants).}
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{Long entry} when $T_t$ flips from $-1$ to $+1$.
+    \item \textbf{Close long and short entry} when $T_t$ flips from $+1$ to $-1$.
+    \item \textbf{Always in market}: no flat state in the base strategy.
+\end{itemize}
+
+\paragraph{Position sizing --- full capital deployment.}
+Sizing uses the course-mandated \texttt{FixedCashSizer} which targets
+$\sim\!100{,}000$~TL of notional per individual \texttt{buy()}/\texttt{sell()}
+order. A naive implementation that holds a single 100k lot at a time would
+leave 90\% of the 1M~TL capital idle, producing misleading single-digit CAGRs.
+We therefore fire $\lfloor \text{equity}/100{,}000 \rfloor$ market orders on
+each signal flip ($\approx 10$~orders for a fresh 1M account), close any
+opposite position first, and hold the stacked lots until the next flip. This
+respects the per-trade cap while keeping capital fully invested.
+
+\paragraph{Why HP is designated the primary strategy.}
+Per Section~\ref{sec:theory}, the HP-direction rule maps directly onto the
+Harris--Yilmaz argument that a low-frequency filter's directional sign is a
+clean trend signal. Empirically, LOWESS edges HP at every aggregation level
+(Section~\ref{sec:results-h2h}); the difference is small enough that retaining
+HP as the principled primary and reporting LOWESS as the head-to-head
+benchmark is honest reporting rather than benchmark-swapping.
+
+\subsection{Regime Filter (Phase 2)}\label{sec:regime}
+
+After picking a primary on the index, we deploy it on individual stocks
+\emph{gated by the BIST100's own HP-trend}:
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{Long entry} on stock $i$ requires: stock signal long
+          \textbf{AND} BIST100 close $>$ HP-filtered BIST100 close.
+    \item \textbf{Short entry} on stock $i$ requires: stock signal short
+          \textbf{AND} BIST100 close $<$ HP-filtered BIST100 close.
+    \item \textbf{Exits} ignore the regime filter (to avoid trapping positions
+          when the regime flips intra-trade).
+\end{itemize}
+The economic story is straightforward top-down filtering: trade with the
+index, not against it.
+
+% ============================================================================
+\section{Methodology}
+% ============================================================================
+
+\subsection{Data and Universe}
+
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{Phase~1 universe:} BIST100 Index daily close, ticker
+          \texttt{XU100.IS} on Yahoo Finance.
+    \item \textbf{Phase~2 universe:} 29 BIST100 constituents (cleaned from a
+          curated list of 31 well-known blue chips, two failing yfinance ingest
+          as ``possibly delisted''). Three additional placeholders
+          (\texttt{SODA.IS}, \texttt{KOZAL.IS}, \texttt{KOZAA.IS}) need ticker
+          remapping before they can be re-added. Survivorship bias is
+          acknowledged but not corrected, per brief.
+    \item \textbf{Data fields:} OHLCV in TL, daily frequency.
+    \item \textbf{Period:} 2003-01-01 to 2026-05-11 ($\sim$23~years). Panel
+          shape: $5997 \times 29$. \texttt{PGSUS} has the shortest history at
+          $3273$ bars (later IPO); all 29 clear the
+          \texttt{MIN\_HISTORY\_DAYS=750} floor.
+\end{itemize}
+
+\paragraph{Currency redenomination and corporate-action fix.}
+yfinance does not back-adjust for the 2005-01-03 Turkish TL 1M-to-1
+redenomination, leaving a $\sim$1000$\times$ single-day price jump in every
+Turkish equity series. The function \texttt{src/data/clean.py::\_adjust\_splits}
+detects any single-day price ratio $>3\times$ (or $<1/3\times$) and rescales
+all prior OHLC values by that ratio, idempotently. The $3\times$ threshold
+(originally $50\times$) also catches the MGROS 2009-08-04 corporate-action gap
+(factor $4.04\times$) that previously caused $-14358\%$ MDD blowups on shorts.
+The largest legitimate single-day move in the universe is HEKTS $+44\%$, well
+below the threshold.
+
+\subsection{Causal Wrappers for HP and LOWESS}\label{sec:causal-wrappers}
+
+The brief's \texttt{hp\_filter(x, lam=1600)} and the
+\texttt{statsmodels.lowess(...)} routines both operate on the \emph{whole}
+input series at once. Used directly inside a backtest, they leak future data
+into past trend values. We therefore wrap both in rolling-window helpers
+(\texttt{src/features/hp.py::rolling\_hp\_trend} and
+\texttt{src/features/lowess.py::rolling\_lowess\_trend}) that, at each bar
+$t$, re-fit on the trailing window $[t-W,t]$ and return only the rightmost
+trend value. The bare functions remain available for EDA and plotting; the
+backtest pipeline never sees them.
+
+\subsection{Backtest Mechanics}
+
+A single Backtrader Cerebro instance per (strategy, ticker) pair keeps P\&L
+attribution clean. The wiring is:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{Feed} (\texttt{src/backtest/feeds.py}):
+          \texttt{PandasData} extended with a precomputed \texttt{trend} line
+          and (for the regime variant) a \texttt{regime} line.
+    \item \textbf{Strategy} (\texttt{src/backtest/strategies.py}): reads
+          \texttt{self.data.trend[0]}, acts on sign flips, sizes orders with
+          \texttt{FixedCashSizer(100\_000)}.
+    \item \textbf{Runner} (\texttt{src/backtest/runner.py}): orchestrates the
+          Cerebro lifecycle, attaches analyzers for per-bar equity and
+          per-trade P\&L, returns a structured \texttt{RunResult}.
+\end{itemize}
+
+Backtrader's \texttt{next()} with market orders fills the next bar; signals
+generated on bar $t$ therefore translate to fills at $t+1$, which is the
+correct convention.
+
+\subsection{Performance Metrics}
+
+Reported for every (strategy, variant, ticker) combination:
+\begin{multicols}{2}
+\begin{enumerate}[leftmargin=1.4em,itemsep=1pt]
+    \item Net P/L (TL and \%)
+    \item Compound Annual Growth Rate (CAGR)
+    \item Annualised volatility
+    \item Sharpe ratio (annualised)
+    \item Sortino ratio (annualised)
+    \item Max drawdown and drawdown duration
+    \item Calmar ratio
+    \item Win rate, average win, average loss
+    \item Number of trades, average holding period
+    \item Turnover
+\end{enumerate}
+\end{multicols}
+
+\subsection{Hyperparameter Optimisation}\label{sec:opt}
+
+\textbf{Phase~1 grid (BIST100 Index)} via
+\texttt{src/backtest/sweep.py::default\_specs()}:
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{S1:} $n_f\!\in\!\{5,10,20,30\}$, $n_s\!\in\!\{50,100,200\}$ with $n_f<n_s$.
+    \item \textbf{S2:} $n\!\in\!\{10,20,50,100,200\}$.
+    \item \textbf{S3:} $\lambda\!\in\!\{100, 1600, 14400, 129600\}$,
+          window $W\!\in\!\{252,504,1260\}$.
+    \item \textbf{S4:} $\text{frac}\!\in\!\{0.05, 0.1, 0.2, 0.3\}$,
+          window same as S3.
+\end{itemize}
+\textbf{Selection rule:} highest Sharpe, with a minimum-trade floor
+($\ge 30$ round trips) to disqualify degenerate configurations.
+
+\textbf{Phase~2 walk-forward:} 3-year training, 1-year test, 1-year step, with
+parameter re-selection on each training window. The 5-year ($W=1260$)
+configurations are pruned because their warmup leaves too little post-warmup
+room for fold-level retraining.
+
+\subsection{Statistical Significance: Monte-Carlo Bootstrap}\label{sec:mc}
+
+For each (strategy, ticker) we generate $N=1000$ random binary signals that
+match the empirical:
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+    \item run-length distribution (a proxy for trade frequency $\times$
+          holding period);
+    \item long/short proportion.
+\end{enumerate}
+Each random signal is then scored on the same prices with the same simulator,
+producing a null distribution of Sharpe ratios. The one-sided $p$-value is the
+fraction of random Sharpes exceeding the strategy's. The fast vectorised
+simulator in \texttt{src/eval/montecarlo.py} is used for both the strategy and
+the matched-random pool to keep the comparison apples-to-apples.
+
+\subsection{Portfolio Aggregation}\label{sec:portfolio-method}
+
+The equal-weight cross-sectional portfolio (DESIGN.md milestone M4) is built
+by an \texttt{effective\_position} state machine in
+\texttt{src/eval/portfolio.py} that mirrors \texttt{TrendStrategy} and
+\texttt{TrendRegimeStrategy} exactly, including the regime variant's
+\emph{sticky-flat} entry behaviour. Per ticker, this gives a $\{-1,0,+1\}$
+held-position series. The portfolio return on bar $t$ is the cross-sectional
+mean of per-ticker strategy returns ($\text{pos}_{t-1} \cdot
+\Delta\!\ln P_t$), skipping pre-IPO NaNs and counting flat-but-active tickers
+as zero contributions.
+
+% ============================================================================
+\section{Results}\label{sec:results}
+% ============================================================================
+
+\subsection{Phase 1 -- BIST100 Index Sweep}
+
+The 41-configuration grid (run time $\approx 17$~min on a single core, full
+deployment) produces the following best-by-Sharpe winners
+(\texttt{results/phase1\_sweep.parquet}):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Strategy} & \textbf{Best params} & \textbf{Sharpe} & \textbf{Trades} & \textbf{CAGR} & \textbf{MDD} \\
+\midrule
+S4 LOWESS direction          & frac=0.2, $W$=252       & 0.876 & 560 & 19.89\% & $-46.4\%$ \\
+S3 HP direction (\emph{primary}) & $\lambda$=14400, $W$=504 & 0.818 & 576 & 17.52\% & $-43.3\%$ \\
+S2 EMA direction              & $n$=20                  & 0.742 & 634 & 16.71\% & $-47.1\%$ \\
+S1 EMA crossover              & $n_f$=5, $n_s$=100      & 0.719 & 126 & 15.60\% & $-52.8\%$ \\
+\midrule
+\multicolumn{2}{l}{\emph{Reference: BIST100 buy-and-hold (23.3y)}} & 0.92 & --- & 23.46\% & $-63.4\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Phase-1 winners on the BIST100 Index. The strategies underperform
+buy-and-hold on absolute return but cut drawdown by 15--20~percentage points.}
+\end{table}
+
+\paragraph{Reading.} Four observations stand out:
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+    \item All four strategies are competitive with buy-and-hold in Sharpe
+          terms.
+    \item LOWESS and HP --- the two low-pass filters --- beat the two EMA
+          strategies, consistent with the Harris--Yilmaz hypothesis.
+    \item S1 (the classical MA crossover) is the weakest, with the fewest
+          trades. Crossover rules wait for a magnitude-difference rather than
+          a slope-change, so they enter later and exit later.
+    \item Drawdowns are 15--20pp shallower than buy-and-hold but still
+          $\sim$45--53\%. This is the cost of always-in-market with shorts.
+\end{enumerate}
+
+\subsection{Phase 1 -- Monte-Carlo Significance}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Strategy} & \textbf{Sharpe} & \textbf{MC mean} & \textbf{MC $q_{95}$} & \textbf{$p$-value} \\
+\midrule
+S4 LOWESS    & 0.87 & 0.16 & 0.50 & $<0.001$ \\
+S2 EMA dir   & 0.86 & 0.19 & 0.54 & $0.002$  \\
+S3 HP        & 0.80 & 0.14 & 0.47 & $0.001$  \\
+S1 EMA xover & 0.61 & 0.29 & 0.67 & $0.086$  \\
+\bottomrule
+\end{tabular}
+\caption{Run-length-bootstrap Monte-Carlo Sharpe $p$-values, $N{=}1000$.
+S2/S3/S4 reject random at $p<0.005$. S1 is only marginal at the 5\% level ---
+consistent with the Harris--Yilmaz finding that LF-filter direction
+out-performs MA crossover.}
+\end{table}
+
+\subsection{Phase 2 -- Per-Stock Full History}
+
+Single-config full-history backtests on 29 constituents, both base and
+BIST100-HP regime-gated, run via \texttt{src/eval/run\_phase2.py}:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \textbf{HP base} & \textbf{HP regime} & \textbf{LOWESS base} & \textbf{LOWESS regime} \\
+\midrule
+mean Sharpe   & 0.419 & 0.372 & 0.454 & 0.421 \\
+mean CAGR     & 9.82\% & 7.56\% & 11.37\% & 9.11\% \\
+mean MDD      & $-70.4\%$ & $-66.6\%$ & $-72.9\%$ & $-65.7\%$ \\
+total trades  & 16{,}717 & 11{,}630 & 17{,}226 & 11{,}592 \\
+Sharpe$>$0    & 26/29 & 28/29 & 27/29 & 28/29 \\
+\bottomrule
+\end{tabular}
+\caption{Phase-2 per-stock summary on 29 redenomination-adjusted BIST100
+constituents.}
+\end{table}
+
+\paragraph{Reading.} The regime filter cuts trade count by $\sim$30\% (entries
+gated, exits not), trims mean MDD by 2--5~pp, and lifts the
+Sharpe-positive count from 26/29 to 28/29 --- but it does \emph{not} uniformly
+raise Sharpe (base edges regime on the mean). It rescues weak tickers (BIMAS,
+ENKAI, ARCLK) while hurting some strong ones (TKFEN, TOASO, VESTL, HEKTS).
+The headline interpretation: the regime acts as a \emph{variance reducer},
+not a \emph{Sharpe enhancer}.
+
+\subsection{Phase 2 -- Per-Stock Monte Carlo}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrr@{}}
+\toprule
+& \textbf{HP} & \textbf{LOWESS} \\
+\midrule
+$p<0.01$            & 8/29  & 10/29 \\
+$p<0.05$            & 16/29 & 18/29 \\
+mean strat Sharpe   & 0.436 & 0.465 \\
+\bottomrule
+\end{tabular}
+\caption{Per-stock MC Sharpe $p$-values, $N{=}1000$, base variant. Regime
+variant is intentionally not MC-tested because the gated-entry / sticky-flat
+logic is path-dependent and would be mis-stated by the fast simulator.}
+\end{table}
+
+Roughly 55\% of constituents reject random at 5\% under HP; 62\% under LOWESS.
+At the 1\% level the counts are 28\% and 34\% respectively.
+
+\subsection{Phase 2 -- Equal-Weight Portfolio}\label{sec:portfolio-results}
+
+The cross-sectional equal-weight portfolio (Section~\ref{sec:portfolio-method})
+is the headline DESIGN.md~M4 number:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Metric} & \textbf{HP base} & \textbf{HP regime} & \textbf{LOWESS base} & \textbf{LOWESS regime} \\
+\midrule
+Sharpe              & 0.895 & 0.823 & 1.049 & 0.958 \\
+Sortino             & 1.07  & 0.98  & ---   & ---   \\
+CAGR                & 15.29\% & 11.94\% & 18.15\% & 13.74\% \\
+Ann.~volatility     & 17.7\% & 15.1\% & 17.3\% & 14.6\% \\
+Max drawdown        & $-26.8\%$ & $-25.1\%$ & $-28.5\%$ & $-25.5\%$ \\
+Calmar              & 0.57  & 0.48  & --- & --- \\
+Total return (24y)  & 29.6$\times$ & 14.7$\times$ & 52.9$\times$ & 21.4$\times$ \\
+Mean active tickers & 24/29 & 19/29 & 24/29 & 19/29 \\
+\bottomrule
+\end{tabular}
+\caption{Equal-weight cross-sectional portfolio metrics. The portfolio Sharpe
+($\sim$0.9 for HP, $\sim$1.05 for LOWESS) is roughly $2\times$ the mean
+per-ticker Sharpe ($\sim$0.42--0.46) --- the diversification benefit of
+cross-sectional aggregation.}
+\end{table}
+
+\paragraph{Reading.}
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item LOWESS portfolio Sharpe $1.05$ exceeds BIST100 buy-and-hold Sharpe
+          $0.92$. HP portfolio Sharpe $0.90$ is essentially at parity with
+          buy-and-hold.
+    \item Total nominal return is $\sim$22\% of buy-and-hold for HP and
+          $\sim$39\% for LOWESS --- i.e.\ the strategies give up substantial
+          nominal upside in exchange for $\sim$2$\times$ shallower drawdowns
+          ($-27\%$ vs $-63\%$).
+    \item The regime variant lowers volatility (by $\sim$2.6pp for HP,
+          $\sim$2.7pp for LOWESS) and tightens MDD marginally, but at the cost
+          of $\sim$3--4pp of CAGR and $\sim$0.07--0.09 of Sharpe.
+\end{itemize}
+
+\subsection{Phase 2 -- Walk-Forward (S3 HP)}
+
+A 6-configuration grid (\(\lambda\!\in\!\{1600,14400,129600\}\) \(\times\)
+\(W\!\in\!\{252,504\}\)), with 3-year train, 1-year test, 1-year step,
+produces 477 fold rows per variant:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+& \textbf{mean test Sharpe} & \textbf{median} & \textbf{\% folds $>0$} & \textbf{mean test MDD} \\
+\midrule
+Base               & 0.358 & 0.369 & 66.3\% & $-25.4\%$ \\
+BIST100-HP regime  & 0.294 & 0.295 & 63.7\% & $-25.6\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Walk-forward summary, S3~HP, 29~tickers.}
+\end{table}
+
+\paragraph{Parameter selection.} Across base folds, $W{=}252$ is picked in
+$466/476$ folds; $\lambda$ splits $192 / 141 / 133$ across
+$\{129600, 14400, 1600\}$. The slow $\lambda$ $\times$ long $W$
+combinations are essentially unused --- they should be trimmed in any
+next-iteration grid.
+
+\paragraph{Best / worst tickers.} Best by mean fold Sharpe: VESTL~0.86,
+ULKER~0.72, TKFEN~0.68, HEKTS~0.67, KRDMD~0.67, KCHOL~0.66, ISCTR~0.63.
+Worst: BIMAS~$-0.28$, ENKAI~$-0.23$, TCELL~0.00, SAHOL~0.10, ASELS~0.11.
+
+\subsection{HP vs LOWESS Head-to-Head}\label{sec:results-h2h}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Metric}                  & \textbf{S3 HP} & \textbf{S4 LOWESS} & \textbf{$\Delta$ (L--H)} \\
+\midrule
+mean Sharpe (base)               & 0.419 & 0.454 & $+0.035$ \\
+mean Sharpe (regime)             & 0.372 & 0.421 & $+0.049$ \\
+mean MDD (base)                  & $-70.4\%$ & $-72.9\%$ & $-2.5$pp \\
+mean MDD (regime)                & $-66.6\%$ & $-65.7\%$ & $+0.9$pp \\
+total trades (base)              & 16{,}717 & 17{,}226 & $+509$ \\
+Sharpe$>$0 (base)                & 26/29 & 27/29 & $+1$ \\
+\midrule
+MC $p<0.01$                      & 8/29  & 10/29 & $+2$ \\
+MC $p<0.05$                      & 16/29 & 18/29 & $+2$ \\
+mean MC Sharpe                   & 0.436 & 0.465 & $+0.029$ \\
+\midrule
+Portfolio Sharpe (base)          & 0.895 & 1.049 & $+0.154$ \\
+Portfolio Sharpe (regime)        & 0.823 & 0.958 & $+0.135$ \\
+Portfolio CAGR (base)            & 15.29\% & 18.15\% & $+2.86$pp \\
+Portfolio CAGR (regime)          & 11.94\% & 13.74\% & $+1.80$pp \\
+Portfolio total return (base)    & 29.6$\times$ & 52.9$\times$ & $+78\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Head-to-head HP vs LOWESS across every aggregation level.}
+\end{table}
+
+\paragraph{Verdict.} LOWESS dominates HP at every aggregation level ---
+per-stock ($+0.04$ to $+0.06$ Sharpe), MC (more tickers significant at
+both 1\% and 5\%), and portfolio ($+0.15$ Sharpe, $+2.8$pp CAGR,
+$\sim$80\% more total return). The original choice of S3~HP as the primary
+strategy was the theoretically motivated one (Harris--Yilmaz LF-filter
+argument); the writeup reports \textbf{HP as primary on principle and LOWESS
+as the better empirical alternative} rather than swapping winners. Both reject
+random handily; the gap is real but modest in significance terms
+($8 \to 10$ tickers at $p<0.01$, $16 \to 18$ at $p<0.05$).
+
+% ============================================================================
+\section{Findings and Discussion}
+% ============================================================================
+
+\subsection{Summary of Key Findings}
+
+\begin{enumerate}[leftmargin=1.5em,itemsep=4pt]
+
+\item \textbf{Low-frequency filters beat moving-average crossovers}, as
+predicted by Harris and Yilmaz. On the BIST100 Index, S3~HP and S4~LOWESS
+both produce Sharpe $>0.8$ and reject the matched-random null at $p<0.005$,
+while S1~EMA crossover only reaches Sharpe $0.61$ and is marginal at $p=0.086$.
+
+\item \textbf{Trend signal direction (S2/S3/S4) is the consistent winner},
+suggesting that the act of \emph{differencing the smoother} --- rather than
+\emph{comparing two smoothers} --- is where the edge lives.
+
+\item \textbf{LOWESS narrowly outperforms HP empirically at every aggregation
+level} (per-stock, MC, portfolio). The gap is real but modest in statistical
+terms.
+
+\item \textbf{The regime filter is a variance reducer, not a Sharpe
+enhancer.} Across both HP and LOWESS, gating with the BIST100-HP filter
+cuts trade count $\sim$30\% and trims MDD by 2--5pp, but reduces mean Sharpe
+slightly. It rescues the worst-of-base tickers (THYAO, BIMAS, ENKAI) while
+hurting some of the best (TKFEN, TOASO, VESTL).
+
+\item \textbf{Cross-sectional diversification roughly doubles Sharpe.} The
+$\sim$0.42 mean per-ticker Sharpe becomes a $\sim$0.90 portfolio Sharpe ---
+the standard diversification dividend from 29 imperfectly correlated bets.
+
+\item \textbf{The strategy is a drawdown reducer, not a return enhancer.}
+Versus BIST100 buy-and-hold (CAGR $23.5\%$, MDD $-63.4\%$), the LOWESS
+portfolio (CAGR $18.2\%$, MDD $-28.5\%$) gives up $\sim$5pp of CAGR for
+roughly half the drawdown. The HP portfolio gives up $\sim$8pp of CAGR for
+the same drawdown profile.
+
+\item \textbf{Out-of-sample Sharpe materially lower than in-sample.} The
+3y/1y/1y walk-forward yields a $\sim$0.36 mean test Sharpe per ticker, well
+below the $0.82$ in-sample index Sharpe. This is the honest cost of fold-level
+re-estimation on noisy individual names rather than the smoother index.
+
+\item \textbf{Parameter robustness.} Across walk-forward folds, the short
+window ($W{=}252$) wins 466/476 times. $\lambda$ is much less determined:
+all three values appear meaningfully (133, 141, 192 selections). The grid
+should be trimmed in any next iteration.
+
+\end{enumerate}
+
+\subsection{The Sharpe vs CAGR Trade-Off Frontier}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Approach} & \textbf{Sharpe} & \textbf{CAGR} & \textbf{MDD} \\
+\midrule
+BIST100 buy-and-hold        & 0.92 & 23.46\% & $-63.4\%$ \\
+HP portfolio (base)         & 0.90 & 15.29\% & $-26.8\%$ \\
+HP portfolio (regime)       & 0.82 & 11.94\% & $-25.1\%$ \\
+LOWESS portfolio (base)     & 1.05 & 18.15\% & $-28.5\%$ \\
+LOWESS portfolio (regime)   & 0.96 & 13.74\% & $-25.5\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Risk-adjusted comparison. Only LOWESS-base produces a Sharpe
+ratio meaningfully above buy-and-hold; all four portfolio variants cut MDD by
+$\sim$35--40pp.}
+\end{table}
+
+The natural reading: a leverage-tolerant investor with a moderate $\sim$30\%
+drawdown budget can scale the LOWESS-base portfolio by $\sim$2.3$\times$ to
+match buy-and-hold's MDD, in which case its expected CAGR would rise to
+$\sim$42\% --- well above buy-and-hold's $23\%$. (This is a back-of-envelope
+calculation; an honest scaled version would need a re-run with margin
+financing costs and short-borrow costs explicitly modelled.)
+
+\subsection{Why the Regime Filter Underperforms on Sharpe}
+
+Asymmetric gating is the proximate culprit: the filter blocks \emph{entries}
+but not \emph{exits}. This produces \emph{sticky-flat} stretches where the
+signal has flipped (in favour of a new direction), but the regime disagrees,
+so the strategy sits in cash --- missing the early part of the new move. When
+the regime later confirms, the strategy enters late at a worse price. The
+losses on early-entry days that the filter \emph{would have caught} are
+typically smaller than the missed early gains on the days the filter blocks.
+
+\subsection{Comparison with Harris--Yilmaz (2008)}
+
+Harris and Yilmaz study daily FX, not equities. Two systematic differences
+matter:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{Drift sign.} Equities have a positive unconditional drift,
+          FX pairs do not. Always-in-market shorts on equities therefore bleed
+          against the drift even on good signals. This explains the large
+          per-stock MDDs and the strategy's underperformance versus
+          buy-and-hold on absolute return.
+    \item \textbf{Volatility regimes.} Turkish equities exhibit the FX-like
+          regime-of-regimes structure (currency crises, 2018 lira crisis, etc.)
+          but with additional equity-specific factors (sector cycles, corporate
+          actions). The HP/LOWESS direction signal captures the
+          regime-of-regimes well; sector-specific factors are uncaptured.
+\end{itemize}
+
+The structural Harris--Yilmaz conclusion --- LF-filter direction beats MA
+crossover --- replicates in our setting. The magnitude of the edge is smaller,
+which is what one would expect when transferring an FX result to an equity
+universe with positive drift and shortable but costly individual names.
+
+% ============================================================================
+\section{Improvement Ideas and Future Work}
+% ============================================================================
+
+The following are concrete, prioritised improvement directions. Each is scoped
+small enough to be tackled as an independent piece of work; none blocks the
+others.
+
+\subsection{Data and Universe}
+
+\paragraph{IM1 -- Full official BIST100 membership.} The current 29-name
+universe is a curated subset of well-known blue chips. Swapping in the
+official current 100-name membership (subtracting whichever names still fail
+yfinance) would treble the cross-sectional sample, improve diversification,
+and let us report per-sector breakdowns honestly. \emph{Estimated effort:}
+1--2~days, mostly ticker remapping for the names that still fail ingest.
+
+\paragraph{IM2 -- Point-in-time BIST100 membership (no survivorship).} The
+brief permits survivorship bias, but the most defensible upgrade is to use
+\emph{historical point-in-time} membership: at each rebalance date, only
+trade names that were in the index at that time. Bloomberg and Refinitiv ship
+this; constructing it from public sources is laborious but not infeasible.
+\emph{Estimated effort:} 1--2~weeks if done from scratch, 1~day if a vendor
+file is available.
+
+\paragraph{IM3 -- Adjusted-close vendor data.} The
+\texttt{\_adjust\_splits($3\times$)} threshold catches the 2005 redenomination
+and the MGROS 2009 gap; but a single threshold is fragile. Using a
+proper corporate-actions feed (vendor adjusted-close with audited split,
+dividend and rights-issue factors) would eliminate the threshold-tuning
+fragility entirely.
+
+\paragraph{IM4 -- Currency-translated returns.} All returns are in TL. The TL
+has depreciated $\sim$90\% in USD terms over the sample. A USD-denominated
+view would expose to a foreign investor what fraction of the local
+Sharpe survives FX translation. This is a $\sim$1-day add-on (multiply by
+USDTRY, compute Sharpe).
+
+\subsection{Signal Engineering}
+
+\paragraph{IM5 -- HP + LOWESS signal ensemble.} The two LF-filter signals are
+correlated but not identical (Phase-1 Sharpe gap of $0.06$, per-stock Sharpe
+gap of $0.04$). A simple AND-gate (trade only when both agree) or weighted
+vote could be tested cheaply. \emph{Hypothesis:} ensembling cuts whipsaws at
+the cost of a slightly slower entry, with net Sharpe improvement.
+
+\paragraph{IM6 -- Adaptive $\lambda$.} The walk-forward shows
+$\lambda$-selection is unstable across folds (no single $\lambda$ dominates,
+unlike $W{=}252$). A volatility-adaptive $\lambda(t) = \lambda_0 / \sigma_t^2$
+(more smoothing in high-vol regimes) is a one-line change and would test
+whether the instability is genuine or an artefact of grid coarseness.
+
+\paragraph{IM7 -- Slope magnitude, not just sign.} The current rules use only
+$\operatorname{sign}(\Delta \tau_t)$. Using $\Delta \tau_t / \sigma_t$ as a
+\emph{continuous} signal that scales position size would give a smoother
+allocation and might reduce whipsaw losses. This is a meaningful re-design ---
+the brief's binary-trend convention would need to be relaxed.
+
+\paragraph{IM8 -- HP residual as a contrarian overlay.} The high-frequency
+residual $c_t = P_t - \tau_t$ is by construction mean-reverting. A short-term
+mean-reversion overlay using $c_t$ could be added as an orthogonal alpha; the
+two should diversify well.
+
+\paragraph{IM9 -- Kalman / state-space trend.} The HP filter is a special case
+of a local-linear-trend Kalman model with specific signal-to-noise ratio.
+Estimating the SNR from data (rather than fixing $\lambda$) is a principled
+upgrade with virtually no extra implementation cost on top of an
+\texttt{statsmodels} \texttt{UnobservedComponents} call.
+
+\subsection{Position Sizing and Risk Management}
+
+\paragraph{IM10 -- Volatility targeting.} Current sizing is fixed-cash
+(100k~TL per order). A natural improvement is to size to a constant
+\emph{volatility} target: $\text{notional}_t \propto 1/\hat{\sigma}_t$. This
+is standard in CTA practice; it should reduce realised vol drift and improve
+risk-adjusted return at the portfolio level. The brief's
+\texttt{FixedCashSizer} could be replaced with a volatility-targeted sizer
+without otherwise touching the pipeline.
+
+\paragraph{IM11 -- Cross-sectional risk-parity weighting.} The portfolio is
+currently equal-weight. Risk-parity (weight $\propto 1/\sigma_i$) would
+reduce the dominance of high-vol names in the realised portfolio variance.
+This is a one-line change in
+\texttt{src/eval/run\_phase2\_portfolio.py}.
+
+\paragraph{IM12 -- Drawdown stop-out.} Per-ticker MDDs of $-50\%$ to $-90\%$
+are the cost of always-in-market shorts on names with positive drift. A
+per-ticker drawdown stop (e.g.\ exit and wait for the next signal flip if
+the rolling-1y drawdown exceeds 40\%) would directly attack the worst
+realised paths. Requires careful handling so it doesn't degenerate into
+trend-chasing.
+
+\paragraph{IM13 -- Position-level concentration limits.} Single-name
+concentration is currently bounded only by capital. An explicit limit
+($\le 10\%$ of equity per name) would protect against catastrophic single-name
+events.
+
+\subsection{Backtest Realism}
+
+\paragraph{IM14 -- Transaction costs.} The brief mandates zero commissions,
+which the headline backtest respects. A sensitivity analysis with realistic
+BIST commissions (typically 5--15~bps round-trip), bid--ask spread (5--20~bps
+depending on liquidity), and short-borrow cost (highly name-dependent;
+typically 1--5\% annualised for liquid names, much higher for the small-cap
+short side) would tell us how much of the Sharpe survives. Expected impact:
+$\sim$0.1--0.3 Sharpe loss for the high-trade-count strategies.
+
+\paragraph{IM15 -- Slippage model.} Market orders fill at the next-bar open
+in Backtrader's default \texttt{Cheat-On-Open=False} mode. A more honest
+fill model (e.g.\ a fraction of average daily volume capped at 5\% of ADV)
+would surface any liquidity-constrained names. PGSUS and ARCLK are
+candidates.
+
+\paragraph{IM16 -- Borrow availability.} Shorts on Turkish blue chips are
+generally feasible but not always cheap. A two-tier model (block the short
+if borrow $>$ X bps, scale down if borrow $\in$ [Y,X]) would be the right
+realism upgrade. Out of scope of the brief but should be acknowledged.
+
+\subsection{Statistical Testing}
+
+\paragraph{IM17 -- Regime-variant per-stock MC.} The current fast Monte-Carlo
+simulator cannot model the regime variant's sticky-flat behaviour and so the
+per-stock MC table is base-only. Building
+\texttt{monte\_carlo\_sharpe\_regime(prices, signal, regime, n\_iter)} on top
+of the existing \texttt{effective\_position} state machine in
+\texttt{src/eval/portfolio.py} is a $\sim$50-line change and would close the
+methodological gap noted in DESIGN.md~\S10.4.
+
+\paragraph{IM18 -- Portfolio-level Monte Carlo.} The portfolio Sharpes
+($0.90$ HP / $1.05$ LOWESS) deserve their own significance test against a
+matched-random \emph{portfolio}. Per MC iteration: draw an independent
+matched-random signal per ticker, build the effective-position panel,
+equal-weight-average, compute portfolio Sharpe. With $N=500$ the resolution
+at $p<0.01$ is fine and the runtime is tractable.
+
+\paragraph{IM19 -- Stationary block bootstrap.} The current run-length match
+preserves trade-frequency moments but assumes the run-length distribution
+itself is stationary. Politis and Romano's stationary block bootstrap is the
+standard upgrade, blocking on the price series itself rather than the signal.
+
+\paragraph{IM20 -- White's reality check / SPA test.} With four strategies and
+multiple parameter configurations evaluated on the same series, the
+single-strategy Sharpe $p$-values are subject to multiple-testing inflation.
+White's (2000) reality check and Hansen's SPA test (2005) are the standard
+corrections; both have public Python implementations.
+
+\subsection{Walk-Forward and Robustness}
+
+\paragraph{IM21 -- LOWESS walk-forward.} The walk-forward driver currently
+hardcodes \texttt{hp\_direction\_signal}. Adding a \texttt{--strategy lowess}
+arm and running it ($\sim$25--40 minutes on the full universe) would close
+the HP-vs-LOWESS head-to-head out-of-sample. Recommended for the next
+iteration; not strictly required by the brief.
+
+\paragraph{IM22 -- Trim the WF grid.} $W{=}504$ is essentially never picked
+(10/476 folds); dropping it halves the WF runtime with no measurable loss.
+
+\paragraph{IM23 -- Combinatorial purged cross-validation (Lopez de Prado).}
+Walk-forward is a single time-ordered split, vulnerable to a single bad
+fold. Purged $k$-fold CV with embargo is the modern standard for financial
+time-series CV. Implementation effort: $\sim$1--2 days.
+
+\paragraph{IM24 -- Deflated Sharpe ratio.} Lopez de Prado's \emph{deflated
+Sharpe ratio} (2014) corrects for both selection bias (we tried 41 Phase-1
+configurations) and the higher moments of returns. Should be reported
+alongside the raw Sharpe in any updated table.
+
+\subsection{Engineering and Reproducibility}
+
+\paragraph{IM25 -- Feature parquet cache.} DESIGN.md~\S5.2 planned a
+parameter-keyed \texttt{data/features/} cache for indicator parquets and
+explicitly deferred it. With the LOWESS portfolio taking $\sim$25 minutes
+(vs $\sim$1 minute for HP) because each rolling refit cannot be
+pre-factored, the cache becomes worthwhile as soon as we extend the LOWESS
+grid materially.
+
+\paragraph{IM26 -- Restore the venv.} The repository's \texttt{.venv} was
+created under the old path \texttt{\textasciitilde/ec532-project} (the
+repo was renamed). Console scripts with hard-coded shebangs (\texttt{pip},
+\texttt{jupyter}, \texttt{nbconvert}) fail with \emph{bad interpreter}.
+Workaround in use: invoke via \texttt{.venv/bin/python -m <module>}.
+A clean rebuild of the venv would resolve this permanently.
+
+\paragraph{IM27 -- Git initialisation.} The project is not yet a git
+repository. A \texttt{git init} + initial commit would enable per-run
+result reproducibility hashes in the parquet metadata.
+
+\paragraph{IM28 -- Test coverage for causality.} The most consequential
+methodological pitfall in this project is HP/LOWESS look-ahead bias. A unit
+test that compares \texttt{rolling\_hp\_trend(P, lam, W)[t]} against
+\texttt{hp\_filter(P[:t+1], lam)[-1]} would catch any future regression
+where the wrapper accidentally peeks ahead.
+
+\subsection{Reporting Extensions}
+
+\paragraph{IM29 -- Per-sector slice.} \texttt{config.py} has placeholder
+sector comments. Adding a sector tag column and a \texttt{groupby} in the
+portfolio aggregator would give per-sector Sharpe tables (banks, holdings,
+transport, energy, industrials, etc.). A 1-hour change.
+
+\paragraph{IM30 -- Regime-conditional return tables.} Decomposing portfolio
+returns into ``BIST100 trending up'' vs ``BIST100 trending down'' weeks
+would directly visualise where the strategy makes its money. Useful in the
+deck.
+
+\paragraph{IM31 -- Drawdown attribution.} For each MDD episode $>10\%$ in
+the portfolio curve, attribute the loss to (a) underlying market move,
+(b) signal-side losses, (c) regime gating. This is the diagnostic-style
+table that gives a reader confidence in the variance-reducer interpretation.
+
+% ============================================================================
+\section{Limitations}
+% ============================================================================
+
+\begin{enumerate}[leftmargin=1.5em,itemsep=4pt]
+    \item \textbf{Survivorship bias.} The 29-name universe is the
+          \emph{current} membership snapshot. Names that entered then left
+          the index, and names that delisted in the sample, are absent. The
+          brief permits this but a point-in-time membership reconstruction
+          (IM2) is the right next step.
+
+    \item \textbf{Zero transaction costs.} Mandated by the brief, but the
+          strategies trade 16{,}000--17{,}000 round-trips on the
+          29-ticker universe over 24 years. At a realistic
+          10~bps round-trip cost, the unhedged Sharpe loss would be
+          $\sim$0.1--0.2 (IM14).
+
+    \item \textbf{No short-borrow cost.} Equally mandated by the brief;
+          arguably the more important omission given that the strategy spends
+          $\sim$50\% of its life short.
+
+    \item \textbf{No corporate-action vendor feed.} Splits, rights issues
+          and dividends are not properly back-adjusted; we use a single
+          $>3\times$ price-jump heuristic in \texttt{\_adjust\_splits}.
+          Robust to the 2005 redenomination and the MGROS 2009 gap, but
+          could miss smaller corporate actions (IM3).
+
+    \item \textbf{Single primary strategy.} S3~HP is the primary on
+          theoretical grounds; LOWESS is the empirical winner. A
+          model-selection upgrade (cross-validated Sharpe on a holdout fold)
+          would resolve the choice on data rather than priors.
+
+    \item \textbf{Backtrader \texttt{multiprocessing} not used.} The brief
+          warns this optimiser can be flaky; we used sequential loops. With
+          a feature cache (IM25) this becomes a non-issue.
+
+    \item \textbf{Single-window walk-forward.} The 3y/1y/1y split is one
+          specific choice; combinatorial purged CV (IM23) would test
+          robustness to that choice.
+
+    \item \textbf{Sharpe-only selection criterion.} Hyperparameter selection
+          uses only Sharpe (with a min-trade floor). Selection by Calmar,
+          Sortino, or a multi-objective rule would likely pick different
+          parameters.
+\end{enumerate}
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+We implemented a four-variant trend-following strategy on Turkish equities
+inspired by Harris and Yilmaz (2008), with full respect for the EC581 course
+brief's constraints: Backtrader engine, 1M~TL initial capital, 100k~TL
+per-trade \texttt{FixedCashSizer}, zero commissions, daily bars, and a
+matched-random Monte-Carlo $p$-value with $N{=}1000$.
+
+The headline empirical findings are:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=2pt]
+    \item \textbf{The Harris--Yilmaz hypothesis replicates.} Low-frequency
+          filter direction (S3~HP, S4~LOWESS) beats classical MA crossover
+          (S1) on the BIST100 Index, both in raw Sharpe and in Monte-Carlo
+          significance.
+    \item \textbf{HP is the principled primary; LOWESS is the empirical
+          winner.} The gap is small (0.04--0.15 Sharpe across aggregation
+          levels) but consistent; we report both.
+    \item \textbf{The cross-sectional portfolio doubles per-ticker Sharpe.}
+          From $\sim$0.42 mean per-stock to $\sim$0.90 (HP) and $\sim$1.05
+          (LOWESS) portfolio --- a textbook diversification dividend.
+    \item \textbf{The regime filter is a variance reducer.} It cuts trade
+          count $\sim$30\%, tightens MDD slightly, but slightly reduces mean
+          Sharpe. It rescues weak tickers and clips strong ones.
+    \item \textbf{The strategy gives up nominal return for drawdown
+          reduction.} HP/LOWESS portfolios produce $\sim$22--39\% of
+          buy-and-hold's total return at $\sim$42\% of buy-and-hold's MDD.
+\end{itemize}
+
+The most impactful improvement directions are: (i)~adding transaction-cost
+and short-borrow realism (IM14--16), (ii)~upgrading the universe to
+point-in-time BIST100 membership (IM2), (iii)~implementing the regime-variant
+and portfolio-level Monte-Carlo (IM17--18), and (iv)~moving to
+volatility-targeted sizing and risk-parity weighting (IM10--11). Each is a
+1-day to 1-week piece of work and individually addresses a distinct
+limitation in the current methodology.
+
+% ============================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+% ============================================================================
+
+\begin{description}[leftmargin=2em,labelindent=0pt,style=nextline]
+    \item[Asness, Moskowitz, Pedersen (2013).] Value and Momentum Everywhere.
+          \emph{Journal of Finance} 68(3), 929--985.
+    \item[Cleveland, W.S.\ (1979).] Robust Locally Weighted Regression and
+          Smoothing Scatterplots. \emph{Journal of the American Statistical
+          Association} 74(368), 829--836.
+    \item[Hansen, P.R.\ (2005).] A Test for Superior Predictive Ability.
+          \emph{Journal of Business and Economic Statistics} 23(4), 365--380.
+    \item[Harris, R.D.F.\ and Yilmaz, F.\ (2008/2009).] A Momentum Trading
+          Strategy Based on the Low Frequency Component of the Exchange Rate.
+          \emph{Journal of Banking and Finance}.
+    \item[Hodrick, R.J.\ and Prescott, E.C.\ (1997).] Postwar U.S.\ Business
+          Cycles: An Empirical Investigation. \emph{Journal of Money, Credit
+          and Banking} 29(1), 1--16.
+    \item[Lopez de Prado, M.\ (2014).] The Deflated Sharpe Ratio: Correcting
+          for Selection Bias, Backtest Overfitting and Non-Normality.
+          \emph{Journal of Portfolio Management} 40(5), 94--107.
+    \item[Lopez de Prado, M.\ (2018).] \emph{Advances in Financial Machine
+          Learning}. Wiley.
+    \item[Moskowitz, Ooi, Pedersen (2012).] Time Series Momentum.
+          \emph{Journal of Financial Economics} 104(2), 228--250.
+    \item[Politis, D.\ and Romano, J.\ (1994).] The Stationary Bootstrap.
+          \emph{Journal of the American Statistical Association} 89(428),
+          1303--1313.
+    \item[White, H.\ (2000).] A Reality Check for Data Snooping.
+          \emph{Econometrica} 68(5), 1097--1126.
+    \item[Y\"uksel, A.\ (2026).] EC581 Project Brief --- Algorithmic Trading
+          and Quantitative Strategies. Bogazici University.
+\end{description}
+
+% ============================================================================
+\appendix
+\section{Code Structure}\label{app:code}
+% ============================================================================
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,language=,frame=single]
+ec581-project/
+|-- DESIGN.md                  # design document (full spec)
+|-- CLAUDE.md                  # development memo
+|-- NB_Projects.pdf            # course brief
+|-- config.py                  # paths, seeds, capital, universe
+|-- requirements.txt
+|-- data/                      # gitignored
+|   |-- raw/                   # yfinance ingest, immutable
+|   |-- clean/                 # cleaned, redenomination-adjusted
+|   `-- panel/                 # wide prices/volumes + bist100 OHLCV
+|-- results/                   # parquet outputs (sweep, MC, portfolio, WF)
+|-- notebooks/
+|   |-- 01_eda.ipynb
+|   |-- 02_index_strategy_comparison.ipynb
+|   |-- 03_walk_forward.ipynb
+|   `-- 04_regime_filter.ipynb
+`-- src/
+    |-- data/                  # ingest, clean, panel, build
+    |-- features/              # ema, hp, lowess, regime (causal wrappers)
+    |-- backtest/              # sizers, feeds, strategies, runner, sweep
+    `-- eval/                  # metrics, montecarlo, walkforward,
+                               # portfolio, strategies registry,
+                               # CLIs: run_phase2[_mc|_portfolio],
+                               #       run_walkforward
+\end{lstlisting}
+
+% ============================================================================
+\section{Reproducibility}\label{app:repro}
+% ============================================================================
+
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+    \item Build data: \texttt{.venv/bin/python -m src.data.build}
+          (full universe) or
+          \texttt{.venv/bin/python -m src.data.build --smoke}
+          (M1 subset).
+    \item Phase-1 sweep:
+          \texttt{.venv/bin/python -m src.backtest.sweep}
+          $\to$ \texttt{results/phase1\_sweep.parquet}.
+    \item Phase-1 Monte Carlo:
+          \texttt{.venv/bin/python -m src.eval.montecarlo}
+          $\to$ \texttt{results/phase1\_mc.parquet}.
+    \item Phase-2 per stock:
+          \texttt{.venv/bin/python -m src.eval.run\_phase2
+          --strategy \{hp,lowess\}}.
+    \item Phase-2 per-stock MC:
+          \texttt{.venv/bin/python -m src.eval.run\_phase2\_mc
+          --strategy \{hp,lowess\} --n-iter 1000}.
+    \item Phase-2 portfolio:
+          \texttt{.venv/bin/python -m src.eval.run\_phase2\_portfolio
+          --strategy \{hp,lowess\}}.
+    \item Phase-2 walk-forward:
+          \texttt{.venv/bin/python -m src.eval.run\_walkforward}
+          (HP only as of this writing).
+    \item Notebook re-execution:
+          \texttt{.venv/bin/python -m jupyter nbconvert --to notebook
+          --execute notebooks/<nb>.ipynb --output <nb>.ipynb}.
+\end{enumerate}
+
+All MC and bootstrap seeds are sourced from \texttt{config.RANDOM\_SEED=42}.
+
+% ============================================================================
+\end{document}
+% ============================================================================

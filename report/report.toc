@@ -1,0 +1,87 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Project Scope}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Why Trend Following?}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Why Low-Frequency Filters?}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Theoretical Background}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}The Hodrick--Prescott Filter}{4}{subsection.2.1}%
+\contentsline {paragraph}{Causality caveat.}{4}{equation.2.2}%
+\contentsline {subsection}{\numberline {2.2}LOWESS Smoothing}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Exponential Moving Average}{4}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Strategies}{4}{section.3}%
+\contentsline {paragraph}{Trade rules (common to all variants).}{5}{table.caption.1}%
+\contentsline {paragraph}{Position sizing --- full capital deployment.}{5}{table.caption.1}%
+\contentsline {paragraph}{Why HP is designated the primary strategy.}{5}{table.caption.1}%
+\contentsline {subsection}{\numberline {3.1}Regime Filter (Phase 2)}{5}{subsection.3.1}%
+\contentsline {section}{\numberline {4}Methodology}{5}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Data and Universe}{5}{subsection.4.1}%
+\contentsline {paragraph}{Currency redenomination and corporate-action fix.}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Causal Wrappers for HP and LOWESS}{6}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Backtest Mechanics}{6}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Performance Metrics}{6}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Hyperparameter Optimisation}{6}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Statistical Significance: Monte-Carlo Bootstrap}{7}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Portfolio Aggregation}{7}{subsection.4.7}%
+\contentsline {section}{\numberline {5}Results}{7}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Phase 1 -- BIST100 Index Sweep}{7}{subsection.5.1}%
+\contentsline {paragraph}{Reading.}{7}{table.caption.2}%
+\contentsline {subsection}{\numberline {5.2}Phase 1 -- Monte-Carlo Significance}{8}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Phase 2 -- Per-Stock Full History}{8}{subsection.5.3}%
+\contentsline {paragraph}{Reading.}{8}{table.caption.4}%
+\contentsline {subsection}{\numberline {5.4}Phase 2 -- Per-Stock Monte Carlo}{8}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}Phase 2 -- Equal-Weight Portfolio}{8}{subsection.5.5}%
+\contentsline {paragraph}{Reading.}{9}{table.caption.6}%
+\contentsline {subsection}{\numberline {5.6}Phase 2 -- Walk-Forward (S3 HP)}{9}{subsection.5.6}%
+\contentsline {paragraph}{Parameter selection.}{9}{table.caption.7}%
+\contentsline {paragraph}{Best / worst tickers.}{10}{table.caption.7}%
+\contentsline {subsection}{\numberline {5.7}HP vs LOWESS Head-to-Head}{10}{subsection.5.7}%
+\contentsline {paragraph}{Verdict.}{10}{table.caption.8}%
+\contentsline {section}{\numberline {6}Findings and Discussion}{10}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Summary of Key Findings}{10}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}The Sharpe vs CAGR Trade-Off Frontier}{11}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Why the Regime Filter Underperforms on Sharpe}{11}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Comparison with Harris--Yilmaz (2008)}{11}{subsection.6.4}%
+\contentsline {section}{\numberline {7}Improvement Ideas and Future Work}{12}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Data and Universe}{12}{subsection.7.1}%
+\contentsline {paragraph}{IM1 -- Full official BIST100 membership.}{12}{subsection.7.1}%
+\contentsline {paragraph}{IM2 -- Point-in-time BIST100 membership (no survivorship).}{12}{subsection.7.1}%
+\contentsline {paragraph}{IM3 -- Adjusted-close vendor data.}{12}{subsection.7.1}%
+\contentsline {paragraph}{IM4 -- Currency-translated returns.}{12}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Signal Engineering}{12}{subsection.7.2}%
+\contentsline {paragraph}{IM5 -- HP + LOWESS signal ensemble.}{12}{subsection.7.2}%
+\contentsline {paragraph}{IM6 -- Adaptive $\lambda $.}{13}{subsection.7.2}%
+\contentsline {paragraph}{IM7 -- Slope magnitude, not just sign.}{13}{subsection.7.2}%
+\contentsline {paragraph}{IM8 -- HP residual as a contrarian overlay.}{13}{subsection.7.2}%
+\contentsline {paragraph}{IM9 -- Kalman / state-space trend.}{13}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Position Sizing and Risk Management}{13}{subsection.7.3}%
+\contentsline {paragraph}{IM10 -- Volatility targeting.}{13}{subsection.7.3}%
+\contentsline {paragraph}{IM11 -- Cross-sectional risk-parity weighting.}{13}{subsection.7.3}%
+\contentsline {paragraph}{IM12 -- Drawdown stop-out.}{13}{subsection.7.3}%
+\contentsline {paragraph}{IM13 -- Position-level concentration limits.}{13}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}Backtest Realism}{13}{subsection.7.4}%
+\contentsline {paragraph}{IM14 -- Transaction costs.}{13}{subsection.7.4}%
+\contentsline {paragraph}{IM15 -- Slippage model.}{14}{subsection.7.4}%
+\contentsline {paragraph}{IM16 -- Borrow availability.}{14}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}Statistical Testing}{14}{subsection.7.5}%
+\contentsline {paragraph}{IM17 -- Regime-variant per-stock MC.}{14}{subsection.7.5}%
+\contentsline {paragraph}{IM18 -- Portfolio-level Monte Carlo.}{14}{subsection.7.5}%
+\contentsline {paragraph}{IM19 -- Stationary block bootstrap.}{14}{subsection.7.5}%
+\contentsline {paragraph}{IM20 -- White's reality check / SPA test.}{14}{subsection.7.5}%
+\contentsline {subsection}{\numberline {7.6}Walk-Forward and Robustness}{14}{subsection.7.6}%
+\contentsline {paragraph}{IM21 -- LOWESS walk-forward.}{14}{subsection.7.6}%
+\contentsline {paragraph}{IM22 -- Trim the WF grid.}{14}{subsection.7.6}%
+\contentsline {paragraph}{IM23 -- Combinatorial purged cross-validation (Lopez de Prado).}{14}{subsection.7.6}%
+\contentsline {paragraph}{IM24 -- Deflated Sharpe ratio.}{14}{subsection.7.6}%
+\contentsline {subsection}{\numberline {7.7}Engineering and Reproducibility}{15}{subsection.7.7}%
+\contentsline {paragraph}{IM25 -- Feature parquet cache.}{15}{subsection.7.7}%
+\contentsline {paragraph}{IM26 -- Restore the venv.}{15}{subsection.7.7}%
+\contentsline {paragraph}{IM27 -- Git initialisation.}{15}{subsection.7.7}%
+\contentsline {paragraph}{IM28 -- Test coverage for causality.}{15}{subsection.7.7}%
+\contentsline {subsection}{\numberline {7.8}Reporting Extensions}{15}{subsection.7.8}%
+\contentsline {paragraph}{IM29 -- Per-sector slice.}{15}{subsection.7.8}%
+\contentsline {paragraph}{IM30 -- Regime-conditional return tables.}{15}{subsection.7.8}%
+\contentsline {paragraph}{IM31 -- Drawdown attribution.}{15}{subsection.7.8}%
+\contentsline {section}{\numberline {8}Limitations}{15}{section.8}%
+\contentsline {section}{\numberline {9}Conclusion}{16}{section.9}%
+\contentsline {section}{References}{16}{section.9}%
+\contentsline {section}{\numberline {A}Code Structure}{17}{appendix.A}%
+\contentsline {section}{\numberline {B}Reproducibility}{18}{appendix.B}%

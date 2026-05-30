@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+
+data/
+results/
+
+.idea/
+.vscode/
+
+progress.md
+CLAUDE.md
+
+NB_Projects.pdf
