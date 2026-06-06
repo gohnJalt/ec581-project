@@ -19,13 +19,31 @@ Examples:
     python main.py walkforward --smoke
     python main.py notebooks
 
+    # Run any pipeline stage on another market with --dataset:
+    python main.py universe --dataset sp500
+    python main.py data --dataset sp500
+    python main.py phase2 --dataset sp500 --strategy hp
+
+DATASETS
+--------
+
+Every command except `notebooks` takes `--dataset {bist100,sp500}` (default:
+bist100). The dataset selects the index ticker, the Phase-2 constituent
+universe, the smoke subset, and the constituent-list source. Per-ticker raw and
+clean parquet are shared (keyed by Yahoo symbol), but panels and results for
+non-default datasets are namespaced under data/panel/{name}/ and
+results/{name}/ so they don't clobber the BIST100 outputs. Add a market by
+appending a Dataset to config.DATASETS.
+
 COMMANDS AND OPTIONS
 --------------------
 
 universe
-    Refresh data/universe/bist100.txt from Borsa Istanbul (one-shot snapshot
-    of current BIST100 membership; config.BIST100_CONSTITUENTS reads from it).
+    Refresh data/universe/{dataset}.txt from the dataset's source (one-shot
+    snapshot of current membership; config reads from it). For bist100 the
+    source is IsYatirim; for sp500 it is Wikipedia's S&P 500 list.
     Wraps: python -m src.data.fetch_universe
+      --dataset NAME       which dataset to refresh (default: bist100)
       --url URL            override the source page
       --dry-run            print parsed tickers and exit (no file write)
 
@@ -76,9 +94,23 @@ phase2-portfolio
       --param FLOAT        smoother param; defaults to Phase-1 winner
       --window INT         rolling window; defaults to Phase-1 winner
 
+phase2-sizing
+    Conviction-sizing / short-side ablation (progress.md Part 5): reconstructs
+    the cross-sectional portfolio under a ladder of sizing schemes and reports
+    each as a Sharpe delta vs the binary equal-weight baseline. Writes
+    results/phase2_sizing_{stub}_{scoreboard,equity}.parquet.
+    Wraps: python -m src.eval.run_phase2_sizing
+      --smoke              use SMOKE_TICKERS subset
+      --strategy {hp,lowess}
+                           HP-direction (default) or LOWESS-direction
+      --param FLOAT        smoother param; defaults to Phase-1 winner
+      --window INT         rolling window; defaults to Phase-1 winner
+
 phase2-resumable
     Same as `phase2` but writes after each ticker and supports resume — for
-    long LOWESS runs that may stall midway.
+    long LOWESS runs that may stall midway. 
+    (added due to some computational issues in long time windows with lowess;
+    hp or shorter time windows should be fine without it)
     Wraps: python -u -m src.eval.run_phase2_resumable
       --smoke              use SMOKE_TICKERS subset
       --strategy {hp,lowess}
@@ -110,6 +142,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from config import DATASET_NAMES, DEFAULT_DATASET
+
 REPO_ROOT = Path(__file__).resolve().parent
 VENV_PY = REPO_ROOT / ".venv" / "bin" / "python"
 NOTEBOOKS = {
@@ -135,8 +169,12 @@ def _forward(module: str, args: list[str], unbuffered: bool = False) -> int:
     return subprocess.call(cmd, cwd=REPO_ROOT)
 
 
+def _dataset_args(ns: argparse.Namespace) -> list[str]:
+    return ["--dataset", ns.dataset]
+
+
 def _strategy_args(ns: argparse.Namespace) -> list[str]:
-    out: list[str] = []
+    out: list[str] = _dataset_args(ns)
     if ns.smoke:
         out.append("--smoke")
     out += ["--strategy", ns.strategy]
@@ -147,7 +185,14 @@ def _strategy_args(ns: argparse.Namespace) -> list[str]:
     return out
 
 
+def _add_dataset_opt(sp: argparse.ArgumentParser) -> None:
+    sp.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help=f"dataset to operate on (default: {DEFAULT_DATASET}; "
+                         f"choices: {', '.join(DATASET_NAMES)})")
+
+
 def _add_strategy_opts(sp: argparse.ArgumentParser) -> None:
+    _add_dataset_opt(sp)
     sp.add_argument("--smoke", action="store_true")
     sp.add_argument("--strategy", choices=["hp", "lowess"], default="hp")
     sp.add_argument("--param", type=float, default=None,
@@ -156,7 +201,7 @@ def _add_strategy_opts(sp: argparse.ArgumentParser) -> None:
 
 
 def cmd_universe(ns: argparse.Namespace) -> int:
-    args: list[str] = []
+    args: list[str] = _dataset_args(ns)
     if ns.url is not None:
         args += ["--url", ns.url]
     if ns.dry_run:
@@ -165,7 +210,7 @@ def cmd_universe(ns: argparse.Namespace) -> int:
 
 
 def cmd_data(ns: argparse.Namespace) -> int:
-    args: list[str] = []
+    args: list[str] = _dataset_args(ns)
     if ns.smoke:
         args.append("--smoke")
     args += ["--source", ns.source]
@@ -177,7 +222,8 @@ def cmd_data(ns: argparse.Namespace) -> int:
 
 
 def cmd_sweep(ns: argparse.Namespace) -> int:
-    return _forward("src.backtest.run_sweep", ["--min-trades", str(ns.min_trades)])
+    return _forward("src.backtest.run_sweep",
+                    _dataset_args(ns) + ["--min-trades", str(ns.min_trades)])
 
 
 def cmd_phase2(ns: argparse.Namespace) -> int:
@@ -193,6 +239,10 @@ def cmd_phase2_portfolio(ns: argparse.Namespace) -> int:
     return _forward("src.eval.run_phase2_portfolio", _strategy_args(ns))
 
 
+def cmd_phase2_sizing(ns: argparse.Namespace) -> int:
+    return _forward("src.eval.run_phase2_sizing", _strategy_args(ns))
+
+
 def cmd_phase2_resumable(ns: argparse.Namespace) -> int:
     args = _strategy_args(ns)
     if ns.start_from:
@@ -201,7 +251,7 @@ def cmd_phase2_resumable(ns: argparse.Namespace) -> int:
 
 
 def cmd_walkforward(ns: argparse.Namespace) -> int:
-    args: list[str] = []
+    args: list[str] = _dataset_args(ns)
     if ns.smoke:
         args.append("--smoke")
     args += ["--min-trades", str(ns.min_trades)]
@@ -232,21 +282,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sp = sub.add_parser("universe", help="Refresh BIST100 constituents from Borsa Istanbul")
+    sp = sub.add_parser("universe", help="Refresh a dataset's constituent list from its source")
+    _add_dataset_opt(sp)
     sp.add_argument("--url", type=str, default=None,
-                    help="override the source page (default: Borsa Istanbul)")
+                    help="override the source page (default: the dataset's source)")
     sp.add_argument("--dry-run", action="store_true",
                     help="print parsed tickers and exit without writing")
     sp.set_defaults(func=cmd_universe)
 
     sp = sub.add_parser("data", help="ingest -> clean -> panel")
+    _add_dataset_opt(sp)
     sp.add_argument("--smoke", action="store_true")
     sp.add_argument("--source", choices=("yfinance", "csv"), default="yfinance")
     sp.add_argument("--csv-dir", type=Path, default=None)
     sp.add_argument("--force", action="store_true")
     sp.set_defaults(func=cmd_data)
 
-    sp = sub.add_parser("sweep", help="Phase-1 S1..S4 grid search on BIST100 Index")
+    sp = sub.add_parser("sweep", help="Phase-1 S1..S4 grid search on the dataset index")
+    _add_dataset_opt(sp)
     sp.add_argument("--min-trades", type=int, default=30)
     sp.set_defaults(func=cmd_sweep)
 
@@ -263,12 +316,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_strategy_opts(sp)
     sp.set_defaults(func=cmd_phase2_portfolio)
 
+    sp = sub.add_parser("phase2-sizing", help="Conviction-sizing / short-side ablation (Part 5)")
+    _add_strategy_opts(sp)
+    sp.set_defaults(func=cmd_phase2_sizing)
+
     sp = sub.add_parser("phase2-resumable", help="Per-ticker resumable Phase-2 driver")
     _add_strategy_opts(sp)
     sp.add_argument("--start-from", type=str, default=None)
     sp.set_defaults(func=cmd_phase2_resumable)
 
     sp = sub.add_parser("walkforward", help="Phase-2 walk-forward (HP grid)")
+    _add_dataset_opt(sp)
     sp.add_argument("--smoke", action="store_true")
     sp.add_argument("--min-trades", type=int, default=30)
     sp.set_defaults(func=cmd_walkforward)

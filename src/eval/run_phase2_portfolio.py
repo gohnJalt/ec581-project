@@ -28,10 +28,10 @@ import numpy as np
 import pandas as pd
 
 from config import (
-    BIST100_CONSTITUENTS,
     BIST100_INDEX_TICKER,
+    DEFAULT_DATASET,
     RESULTS_DIR,
-    SMOKE_TICKERS,
+    get_dataset,
 )
 from src.data.clean import clean_path
 from src.eval.portfolio import (
@@ -120,6 +120,7 @@ def run(
     window: int | None = None,
     regime_lam: float = REGIME_LAM,
     regime_window: int = REGIME_WINDOW,
+    index_ticker: str = BIST100_INDEX_TICKER,
     out_dir: Path = RESULTS_DIR,
     verbose: bool = True,
 ) -> dict[str, Path]:
@@ -129,7 +130,7 @@ def run(
     p = spec.default_param if param is None else param
     w = spec.default_window if window is None else window
 
-    bist_close = pd.read_parquet(clean_path(BIST100_INDEX_TICKER))["close"]
+    bist_close = pd.read_parquet(clean_path(index_ticker))["close"]
     regime = bist_regime_flag(bist_close, lam=regime_lam, window=regime_window)
 
     if verbose:
@@ -183,6 +184,8 @@ def _print_summary(df: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help="dataset to run (default: bist100)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--strategy", choices=["hp", "lowess"], default="hp")
     ap.add_argument("--param", type=float, default=None,
@@ -190,11 +193,13 @@ def main() -> None:
     ap.add_argument("--window", type=int, default=None)
     args = ap.parse_args()
 
+    ds = get_dataset(args.dataset)
     spec = get_strategy(args.strategy)
-    universe = SMOKE_TICKERS if args.smoke else BIST100_CONSTITUENTS
+    universe = list(ds.smoke_tickers) if args.smoke else ds.load_constituents()
     tickers = _available_tickers(universe)
-    print(f"tickers ({len(tickers)}): {tickers}")
-    run(tickers, spec, param=args.param, window=args.window)
+    print(f"dataset={ds.name}  tickers ({len(tickers)}): {tickers}")
+    run(tickers, spec, param=args.param, window=args.window,
+        index_ticker=ds.index_ticker, out_dir=ds.results_dir)
 
 
 if __name__ == "__main__":

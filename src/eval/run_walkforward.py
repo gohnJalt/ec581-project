@@ -21,11 +21,10 @@ from pathlib import Path
 import pandas as pd
 
 from config import (
-    BIST100_CONSTITUENTS,
     BIST100_INDEX_TICKER,
-    CLEAN_DIR,
+    DEFAULT_DATASET,
     RESULTS_DIR,
-    SMOKE_TICKERS,
+    get_dataset,
 )
 from src.data.clean import clean_path
 from src.eval.walkforward import walk_forward
@@ -70,13 +69,14 @@ def run(
     test_years: int = 1,
     step_years: int = 1,
     min_trades_train: int = 30,
+    index_ticker: str = BIST100_INDEX_TICKER,
     out_dir: Path = RESULTS_DIR,
     verbose: bool = True,
 ) -> dict[str, Path]:
     if not tickers:
         raise RuntimeError("no tickers available — populate data/clean/ first")
 
-    bist_close = _load_close(BIST100_INDEX_TICKER)
+    bist_close = _load_close(index_ticker)
     regime = bist_regime_flag(bist_close, lam=regime_lam, window=regime_window)
     if verbose:
         print(f"regime flag: lam={regime_lam} window={regime_window} "
@@ -153,22 +153,26 @@ def _print_summary(name: str, df: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help="dataset to run (default: bist100)")
     ap.add_argument("--smoke", action="store_true",
-                    help="use SMOKE_TICKERS and a 2-config HP grid")
+                    help="use the dataset's smoke subset and a 2-config HP grid")
     ap.add_argument("--min-trades", type=int, default=30,
                     help="minimum training-fold trade count for a candidate "
                          "to be selectable")
     args = ap.parse_args()
 
-    universe = SMOKE_TICKERS if args.smoke else BIST100_CONSTITUENTS
+    ds = get_dataset(args.dataset)
+    universe = list(ds.smoke_tickers) if args.smoke else ds.load_constituents()
     tickers = _available_tickers(universe)
     grid = WF_HP_GRID_SMOKE if args.smoke else WF_HP_GRID_FULL
 
-    print(f"tickers ({len(tickers)}): {tickers}")
+    print(f"dataset={ds.name}  tickers ({len(tickers)}): {tickers}")
     print(f"grid ({len(grid)} configs): {grid}")
     print(f"min trades per train fold: {args.min_trades}")
 
-    run(tickers, grid, min_trades_train=args.min_trades)
+    run(tickers, grid, min_trades_train=args.min_trades,
+        index_ticker=ds.index_ticker, out_dir=ds.results_dir)
 
 
 if __name__ == "__main__":

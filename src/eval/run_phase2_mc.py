@@ -23,9 +23,9 @@ from pathlib import Path
 import pandas as pd
 
 from config import (
-    BIST100_CONSTITUENTS,
+    DEFAULT_DATASET,
     RESULTS_DIR,
-    SMOKE_TICKERS,
+    get_dataset,
 )
 from src.data.clean import clean_path
 from src.eval.montecarlo import monte_carlo_sharpe
@@ -96,8 +96,10 @@ def _print_summary(df: pd.DataFrame) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help="dataset to run (default: bist100)")
     ap.add_argument("--smoke", action="store_true",
-                    help="use SMOKE_TICKERS subset")
+                    help="use the dataset's smoke subset")
     ap.add_argument("--strategy", choices=["hp", "lowess"], default="hp")
     ap.add_argument("--param", type=float, default=None,
                     help="lam for hp, frac for lowess; defaults to Phase-1 winner")
@@ -105,15 +107,17 @@ def main() -> None:
     ap.add_argument("--n-iter", type=int, default=DEFAULT_N_ITER)
     args = ap.parse_args()
 
+    ds = get_dataset(args.dataset)
     spec = get_strategy(args.strategy)
-    universe = SMOKE_TICKERS if args.smoke else BIST100_CONSTITUENTS
+    universe = list(ds.smoke_tickers) if args.smoke else ds.load_constituents()
     tickers = _available_tickers(universe)
     p = spec.default_param if args.param is None else args.param
     w = spec.default_window if args.window is None else args.window
-    print(f"tickers ({len(tickers)}): {tickers}")
+    print(f"dataset={ds.name}  tickers ({len(tickers)}): {tickers}")
     print(f"strategy: {spec.label} {spec.param_name}={p} window={w}")
     print(f"n_iter: {args.n_iter}")
-    run(tickers, spec, param=args.param, window=args.window, n_iter=args.n_iter)
+    run(tickers, spec, param=args.param, window=args.window, n_iter=args.n_iter,
+        out_dir=ds.results_dir)
 
 
 if __name__ == "__main__":

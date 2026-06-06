@@ -1,6 +1,5 @@
 # Trend Following Strategy — Design Document
 
-**Course:** EC581 — Algorithmic Trading and Quantitative Strategies (Bogazici)
 **Project:** Section 4 of `NB_Projects.pdf` — Trend Following
 **Reference article:** Harris, R. D. F. and Yilmaz, F. (2008/2009), *A Momentum Trading Strategy Based on the Low Frequency Component of the Exchange Rate*, Journal of Banking and Finance.
 
@@ -275,11 +274,13 @@ ec581-project/
         ├── montecarlo.py          # run-length-bootstrap Sharpe MC (fast vectorized sim)
         ├── walkforward.py         # make_folds + walk_forward driver
         ├── portfolio.py           # effective_position state machine + equal-weight aggregator
-        ├── strategies.py          # registry: maps "hp"/"lowess" → (signal_fn, params, output stub)
+        ├── strategies.py          # registry: maps "hp"/"lowess" → (signal_fn, trend_fn, params, stub)
+        ├── sizing.py              # conviction-sizing / short-side overlay sub-model (§10.7)
         ├── run_walkforward.py     # CLI: per-stock walk-forward (HP + regime)
         ├── run_phase2.py          # CLI: per-stock single-config base/regime
         ├── run_phase2_mc.py       # CLI: per-stock Monte-Carlo Sharpe p-value
-        └── run_phase2_portfolio.py # CLI: equal-weight cross-sectional portfolio aggregator
+        ├── run_phase2_portfolio.py # CLI: equal-weight cross-sectional portfolio aggregator
+        └── run_phase2_sizing.py   # CLI: conviction-sizing ablation scoreboard (§10.7)
 ```
 
 **Planned but not yet built** (see Section 10):
@@ -369,6 +370,21 @@ The 30-minute presentation slot per the brief. Outline:
 
 Total ~16 slides → fits comfortably in 30 min. Each notebook in §10.1 produces 2–3 of these slides' figures.
 
+### 10.7 Conviction-sizing / short-side overlay (extension beyond the brief) — **sub-model built, validation pending**
+
+A sizing/selection layer that sits on top of the equal-weight cross-sectional portfolio (§6.5(c)), motivated by a pressure-test of the Part-4 sizing brainstorm (see `progress.md` Parts 4–5). The pressure-test killed the *risk-based* branch and found two *causal* levers that move portfolio Sharpe:
+
+1. **Conviction sizing** — replace the binary ±1 signal with a vol-normalized trend-slope magnitude, so a just-flipped weak trend gets less capital than an established steep one. ~+0.25 Sharpe at neutral drawdown in the reconstruction, robust across four conviction definitions. It works because it is a *within-name, time-series* tilt (weak slopes are universally noisier), not a cross-sectional bet on which names are good (which does not persist — year-over-year per-name Sharpe rank correlation ≈ 0.07).
+2. **Short-side policy** — the short leg is a standalone money-loser (Sharpe ≈ −0.80, fighting a positive-drift inflationary index) but a crash hedge. Dropping it (`long_only`) lifts Sharpe ~+0.16 at deeper MDD; gating shorts through the §3.4 BIST100 regime filter (`regime_short`) is the middle ground.
+
+**Empirically dead, deliberately not built:** inverse-vol, vol-target, risk-parity, fractional Kelly (= `Σ⁻¹μ` tangency, inherits a noisy-Σ̂ *and* noisy-μ̂ problem), and cross-sectional name selection. The whole universe is essentially one TL-inflation factor (raw-return effective bets ≈ 9 of 83); the long/short *signing* already harvests the diversification, and trailing covariance is too noisy to invert out-of-sample (causal LOWESS risk-parity collapses to Sharpe 0.45). This negative result is itself reportable.
+
+**As-built (`src/eval/sizing.py`, `src/eval/run_phase2_sizing.py`).** The sub-model operates on panels like `portfolio.py`: it builds a signed **unit-gross** weight panel from each name's held position × a non-negative conviction magnitude, then combines it with the next bar's raw return. `run_phase2_sizing.py` emits a 9-row ablation scoreboard (binary baseline + 4 conviction definitions + 2 short policies + stacks) with a `sharpe_delta` column, written to `results/phase2_sizing_{stub}_{scoreboard,equity}.parquet`. CLI: `python main.py phase2-sizing [--smoke] [--strategy hp|lowess]`. `StrategySpec` was extended with a `trend_fn` (rolling HP/LOWESS *level*) so the slope magnitude is available.
+
+**Course-constraint caveat.** Conviction sizing and short-dropping both change per-name exposure away from the binary signal + `FixedCashSizer` + long/short mandate (CLAUDE.md "do not change without asking"). This is framed strictly as an **overlay** reported as a delta against the brief-compliant equal-weight baseline; it needs Dr. Yuksel's sign-off before becoming a headline result.
+
+**Validation status.** Smoke (5 names) reproduces the directional finding (conviction +0.16–0.21 Sharpe; `long_only` / `regime_short` lift further; turnover ~doubles, free at `commission=0`). Still pending: full-universe scoreboard generation, re-validation through the real `TrendStrategy` Backtrader engine (the reconstruction's absolute Sharpes are inflated by unit-gross daily rebalance — only deltas are meaningful), and a walk-forward / sub-period split (2018–2026 is largely one regime).
+
 ## 11. Open Questions
 
 1. ~~Do we have adjusted-close vendor data for the full BIST100 history?~~ **Resolved.** yfinance gives auto-adjusted data for normal splits/dividends but does *not* backfill the 2005-01-03 TL redenomination; we apply our own back-adjustment in `clean.py::_adjust_splits` (threshold 50×).
@@ -376,6 +392,7 @@ Total ~16 slides → fits comfortably in 30 min. Each notebook in §10.1 produce
 3. ~~Walk-forward window sizes?~~ **Resolved.** 3y train / 1y test / 1y step with the `window=1260` configs pruned (5y warmup too long for fold-level retraining). 17 folds per ticker on the longest histories.
 4. **Open.** Should `--strategy lowess` walk-forward be run before the deck? (§10.3.) Cost ~30 min; not required by the brief.
 5. **Open.** Regime-variant per-stock MC and portfolio-level MC (§10.4) — worth the ~1–2h to implement before the deck for the cleanest statistical statement, or skip and lean on the per-stock base MC + portfolio CAGR?
+6. **Open.** Conviction-sizing / short-side overlay (§10.7) — the sub-model is built but only smoke-tested. Run the full-universe scoreboard and re-validate through the Backtrader engine before the deck (as an "extension beyond the brief" slide), or leave it as a documented design with the negative risk-based result? Needs the constraint conversation with Dr. Yuksel either way.
 
 ---
 

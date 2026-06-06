@@ -23,12 +23,10 @@ from pathlib import Path
 import pandas as pd
 
 from config import (
-    BIST100_CONSTITUENTS,
-    BIST100_INDEX_TICKER,
     CASH_PER_TRADE,
+    DEFAULT_DATASET,
     INITIAL_CAPITAL,
-    RESULTS_DIR,
-    SMOKE_TICKERS,
+    get_dataset,
 )
 from src.backtest.runner import run_backtest
 from src.data.clean import clean_path
@@ -43,6 +41,8 @@ REGIME_WINDOW = 504
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+                    help="dataset to run (default: bist100)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--strategy", choices=["hp", "lowess"], default="hp")
     ap.add_argument("--param", type=float, default=None)
@@ -51,8 +51,9 @@ def main() -> None:
                     help="Skip tickers until this one (resume mode)")
     args = ap.parse_args()
 
+    ds = get_dataset(args.dataset)
     spec = get_strategy(args.strategy)
-    universe = SMOKE_TICKERS if args.smoke else BIST100_CONSTITUENTS
+    universe = list(ds.smoke_tickers) if args.smoke else ds.load_constituents()
     tickers = [t for t in universe if clean_path(t).exists()]
     if args.start_from:
         i = tickers.index(args.start_from)
@@ -62,8 +63,8 @@ def main() -> None:
     p = spec.default_param if args.param is None else args.param
     w = spec.default_window if args.window is None else args.window
 
-    base_path = RESULTS_DIR / f"phase2_{spec.output_stub}_base.parquet"
-    regime_path = RESULTS_DIR / f"phase2_{spec.output_stub}_regime.parquet"
+    base_path = ds.results_dir / f"phase2_{spec.output_stub}_base.parquet"
+    regime_path = ds.results_dir / f"phase2_{spec.output_stub}_regime.parquet"
 
     base_existing = pd.read_parquet(base_path) if base_path.exists() and args.start_from else pd.DataFrame()
     regime_existing = pd.read_parquet(regime_path) if regime_path.exists() and args.start_from else pd.DataFrame()
@@ -71,7 +72,7 @@ def main() -> None:
         base_existing = base_existing[~base_existing["ticker"].isin(tickers)]
         regime_existing = regime_existing[~regime_existing["ticker"].isin(tickers)]
 
-    bist_close = pd.read_parquet(clean_path(BIST100_INDEX_TICKER))["close"]
+    bist_close = pd.read_parquet(clean_path(ds.index_ticker))["close"]
     regime = bist_regime_flag(bist_close, lam=REGIME_LAM, window=REGIME_WINDOW)
     print(f"regime: lam={REGIME_LAM} window={REGIME_WINDOW} "
           f"long={int((regime>0).sum())} short={int((regime<0).sum())} flat={int((regime==0).sum())}")
