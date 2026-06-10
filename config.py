@@ -34,8 +34,7 @@ COMMISSION = 0.0
 # ---------------------------------------------------------------------------
 # Time window
 # ---------------------------------------------------------------------------
-# Design doc: "expect ~2015–present for most names". END_DATE=None means "today".
-START_DATE = "2018-01-01"
+START_DATE = "2015-01-01"
 END_DATE: str | None = None
 
 # Drop tickers with fewer than this many trading-day observations.
@@ -72,6 +71,7 @@ class Dataset:
     ticker_regex: str                        # whole-cell match for a valid bare code
     yahoo_suffix: str = ""                   # appended to a bare code (".IS" for BIST)
     dot_to_dash: bool = False                # BRK.B -> BRK-B for Yahoo US class shares
+    fixed_universe: bool = False             # no scrape: fetch writes fallback_constituents
 
     @property
     def universe_file(self) -> Path:
@@ -138,9 +138,7 @@ _BIST100 = Dataset(
         "TRALT.IS", "TRMET.IS",
     ),
     smoke_tickers=("AKBNK.IS", "GARAN.IS", "THYAO.IS", "EREGL.IS", "ASELS.IS"),
-    # IsYatirim's BIST 100 fundamentals page (`endeks=01` filters to BIST 100).
-    # Serves a static 100-row HTML table with a `Kod` column. Borsa Istanbul's
-    # own composition page is behind Cloudflare-style protection.
+
     source_url=(
         "https://www.isyatirim.com.tr/tr-tr/analiz/hisse/Sayfalar/"
         "Temel-Degerler-Ve-Oranlar.aspx?endeks=01"
@@ -167,16 +165,50 @@ _SP500 = Dataset(
         "XOM", "CVX", "CAT", "BA", "GE",
     ),
     smoke_tickers=("AAPL", "MSFT", "JPM", "XOM", "JNJ"),
-    # Wikipedia's "List of S&P 500 companies" — first table has a `Symbol` column.
+
     source_url="https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
     code_columns=("Symbol", "Ticker", "Code"),
-    # US tickers: 1-5 uppercase letters with an optional class suffix (BRK.B).
+
     ticker_regex=r"^[A-Z]{1,5}(\.[A-Z])?$",
     yahoo_suffix="",
     dot_to_dash=True,
 )
 
-DATASETS: dict[str, Dataset] = {d.name: d for d in (_BIST100, _SP500)}
+# G20 currencies quoted *vs USD* as `XXXUSD=X` — the value of one unit of the
+# foreign currency in USD (so each series behaves like a USD-priced asset, the
+# right convention for the trend engine). The EU/France/Germany/Italy seats all
+# share EUR, so the unique-currency universe is 16 names. SAR is effectively
+# USD-pegged and CNY is managed — both stay in for completeness but their trend
+# signal is near-degenerate. Index = ICE US Dollar Index (`DX-Y.NYB`); Yahoo's
+# `^DXY`/`DX=F` return no data. There is no clean web table of G20-currency Yahoo
+# symbols, so this is a `fixed_universe` dataset: `python main.py universe
+# --dataset currency` just writes the `fallback_constituents` list below to
+# data/universe/currency.txt (no scrape). The fetch-spec fields are kept only to
+# satisfy the dataclass.
+_CURRENCY = Dataset(
+    name="currency",
+    index_ticker="DX-Y.NYB",
+    fallback_constituents=(
+        # Majors
+        "EURUSD=X", "GBPUSD=X", "JPYUSD=X", "AUDUSD=X", "CADUSD=X",
+        # Asia
+        "CNYUSD=X", "INRUSD=X", "IDRUSD=X", "KRWUSD=X",
+        # Americas
+        "BRLUSD=X", "MXNUSD=X", "ARSUSD=X",
+        # EMEA
+        "TRYUSD=X", "RUBUSD=X", "ZARUSD=X", "SARUSD=X",
+    ),
+    smoke_tickers=("EURUSD=X", "GBPUSD=X", "JPYUSD=X", "AUDUSD=X", "CADUSD=X"),
+    # Fixed universe — fetch is not wired for FX. Wikipedia G20 page kept only as
+    # a human reference; the regex matches Yahoo's 6-letter FX symbols.
+    source_url="https://en.wikipedia.org/wiki/G20",
+    code_columns=("Symbol", "Code", "Ticker"),
+    ticker_regex=r"^[A-Z]{6}=X$",
+    yahoo_suffix="",
+    fixed_universe=True,
+)
+
+DATASETS: dict[str, Dataset] = {d.name: d for d in (_BIST100, _SP500, _CURRENCY)}
 DATASET_NAMES: list[str] = sorted(DATASETS)
 
 

@@ -120,10 +120,12 @@ phase2-resumable
       --start-from TICKER  skip tickers until this one (resume mode)
 
 walkforward
-    Phase-2 walk-forward driver: 3y train / 1y test / 1y step over the HP grid.
-    Writes results/phase2_walkforward_{base,regime}.parquet.
+    Phase-2 walk-forward driver: 3y train / 1y test / 1y step over the grid.
+    Writes results/phase2_walkforward[_lowess]_{base,regime}.parquet
+    (HP keeps the legacy unsuffixed names; LOWESS is _lowess-suffixed).
     Wraps: python -m src.eval.run_walkforward
-      --smoke              use SMOKE_TICKERS and a 2-config HP grid
+      --strategy {hp,lowess}  Phase-2 strategy (default: hp)
+      --smoke              use SMOKE_TICKERS and a 2-config grid
       --min-trades N       minimum training-fold trade count (default: 30)
 
 notebooks
@@ -254,6 +256,7 @@ def cmd_walkforward(ns: argparse.Namespace) -> int:
     args: list[str] = _dataset_args(ns)
     if ns.smoke:
         args.append("--smoke")
+    args += ["--strategy", ns.strategy]
     args += ["--min-trades", str(ns.min_trades)]
     return _forward("src.eval.run_walkforward", args)
 
@@ -325,9 +328,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--start-from", type=str, default=None)
     sp.set_defaults(func=cmd_phase2_resumable)
 
-    sp = sub.add_parser("walkforward", help="Phase-2 walk-forward (HP grid)")
+    sp = sub.add_parser("walkforward", help="Phase-2 walk-forward (HP or LOWESS grid)")
     _add_dataset_opt(sp)
     sp.add_argument("--smoke", action="store_true")
+    sp.add_argument("--strategy", choices=["hp", "lowess"], default="hp")
     sp.add_argument("--min-trades", type=int, default=30)
     sp.set_defaults(func=cmd_walkforward)
 

@@ -107,8 +107,14 @@ def main(argv: list[str] | None = None) -> int:
     url = ns.url or ds.source_url
     out = ns.out or ds.universe_file
 
-    print(f"[{ds.name}] fetching {url}", file=sys.stderr)
-    tickers = fetch_constituents(ds, url=url)
+    if ds.fixed_universe:
+        # No scrapable source (e.g. FX): the curated fallback IS the universe.
+        tickers = list(ds.fallback_constituents)
+        print(f"[{ds.name}] fixed universe — writing {len(tickers)} curated tickers",
+              file=sys.stderr)
+    else:
+        print(f"[{ds.name}] fetching {url}", file=sys.stderr)
+        tickers = fetch_constituents(ds, url=url)
     if not tickers:
         print(f"no tickers parsed from {url} — check the URL or pass --url",
               file=sys.stderr)
@@ -120,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    header = f"# {ds.name} constituents, snapshot from {url}\n"
+    src = "curated fixed list" if ds.fixed_universe else f"snapshot from {url}"
+    header = f"# {ds.name} constituents, {src}\n"
     out.write_text(header + "\n".join(tickers) + "\n")
     print(f"wrote {len(tickers)} tickers to {out}", file=sys.stderr)
     return 0

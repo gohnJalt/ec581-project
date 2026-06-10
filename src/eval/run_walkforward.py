@@ -1,15 +1,17 @@
-"""Phase-2 walk-forward driver: S3 HP on every cleaned ticker, base + regime.
+"""Phase-2 walk-forward driver: chosen strategy on every cleaned ticker.
 
 Reads cleaned OHLCV from ``data/clean/`` (whatever is there — populated by
-``python -m src.data.build``), runs walk-forward for the primary strategy S3
-HP-direction in two variants:
+``python -m src.data.build``), runs walk-forward for the chosen Phase-2
+strategy (S3 HP-direction by default, or S4 LOWESS-direction with
+``--strategy lowess``) in two variants:
 
   - ``base``   plain TrendStrategy (no regime gate)
   - ``regime`` BIST100 vs HP(1600, 504) regime gate per DESIGN.md §3.4
 
-Outputs two parquets under ``results/``:
-  - ``phase2_walkforward_base.parquet``
-  - ``phase2_walkforward_regime.parquet``
+Outputs two parquets under ``results/`` (HP keeps the legacy unsuffixed names;
+LOWESS is ``_lowess``-suffixed, matching the other Phase-2 drivers):
+  - ``phase2_walkforward_base.parquet``        (or ``_lowess_base``)
+  - ``phase2_walkforward_regime.parquet``      (or ``_lowess_regime``)
 """
 
 from __future__ import annotations
@@ -27,24 +29,37 @@ from config import (
     get_dataset,
 )
 from src.data.clean import clean_path
+from src.eval.strategies import StrategySpec, get as get_strategy
 from src.eval.walkforward import walk_forward
-from src.features.hp import hp_direction_signal
 from src.features.regime import bist_regime_flag
 
 
-# Walk-forward HP grid. Tighter than the Phase-1 sweep: drop the 1260-bar
-# window (warmup eats 5y, leaving too little room for per-fold retraining)
-# and drop lam=100 (uncompetitive in Phase 1 per CLAUDE.md results table).
-WF_HP_GRID_FULL = [
-    {"lam": lam, "window": w}
-    for lam, w in product([1600, 14400, 129600], [252, 504])
-]
+# Walk-forward grids, keyed by the strategy's smoother-parameter name. Tighter
+# than the Phase-1 sweep: drop the 1260-bar window (warmup eats 5y, leaving too
+# little room for per-fold retraining) and drop the uncompetitive low-lam HP
+# corner (per CLAUDE.md results table).
+WF_GRID_FULL = {
+    "lam": [
+        {"lam": lam, "window": w}
+        for lam, w in product([1600, 14400, 129600], [252, 504])
+    ],
+    "frac": [
+        {"frac": f, "window": w}
+        for f, w in product([0.05, 0.1, 0.2], [252, 504])
+    ],
+}
 
-# Smoke grid for fast iteration.
-WF_HP_GRID_SMOKE = [
-    {"lam": 14400, "window": 504},
-    {"lam": 1600, "window": 252},
-]
+# Smoke grids for fast iteration (2 configs each).
+WF_GRID_SMOKE = {
+    "lam": [
+        {"lam": 14400, "window": 504},
+        {"lam": 1600, "window": 252},
+    ],
+    "frac": [
+        {"frac": 0.2, "window": 252},
+        {"frac": 0.1, "window": 252},
+    ],
+}
 
 
 def _available_tickers(universe: list[str]) -> list[str]:
@@ -62,6 +77,7 @@ def _load_ohlcv(ticker: str) -> pd.DataFrame:
 
 def run(
     tickers: list[str],
+    spec: StrategySpec,
     grid: list[dict],
     regime_lam: float = 1600,
     regime_window: int = 504,
@@ -95,7 +111,7 @@ def run(
         if verbose:
             print(" [base]")
         base = walk_forward(
-            prices, ohlcv, hp_direction_signal, grid,
+            prices, ohlcv, spec.signal_fn, grid,
             train_years=train_years, test_years=test_years,
             step_years=step_years, min_trades_train=min_trades_train,
             label=ticker, verbose=verbose,
@@ -108,7 +124,7 @@ def run(
             print(" [regime]")
         reg_aligned = regime.reindex(prices.index).fillna(0.0)
         regd = walk_forward(
-            prices, ohlcv, hp_direction_signal, grid,
+            prices, ohlcv, spec.signal_fn, grid,
             regime=reg_aligned,
             train_years=train_years, test_years=test_years,
             step_years=step_years, min_trades_train=min_trades_train,
@@ -121,8 +137,10 @@ def run(
     base_df = pd.concat(base_rows, ignore_index=True) if base_rows else pd.DataFrame()
     regime_df = pd.concat(regime_rows, ignore_index=True) if regime_rows else pd.DataFrame()
 
-    base_path = out_dir / "phase2_walkforward_base.parquet"
-    regime_path = out_dir / "phase2_walkforward_regime.parquet"
+    # HP keeps the legacy unsuffixed names; other strategies are suffixed.
+    stub = "" if spec.key == "hp" else f"_{spec.output_stub}"
+    base_path = out_dir / f"phase2_walkforward{stub}_base.parquet"
+    regime_path = out_dir / f"phase2_walkforward{stub}_regime.parquet"
     base_df.to_parquet(base_path)
     regime_df.to_parquet(regime_path)
 
@@ -156,22 +174,25 @@ def main() -> None:
     ap.add_argument("--dataset", default=DEFAULT_DATASET,
                     help="dataset to run (default: bist100)")
     ap.add_argument("--smoke", action="store_true",
-                    help="use the dataset's smoke subset and a 2-config HP grid")
+                    help="use the dataset's smoke subset and a 2-config grid")
+    ap.add_argument("--strategy", choices=["hp", "lowess"], default="hp",
+                    help="Phase-2 strategy: S3 HP-direction (default) or S4 LOWESS-direction")
     ap.add_argument("--min-trades", type=int, default=30,
                     help="minimum training-fold trade count for a candidate "
                          "to be selectable")
     args = ap.parse_args()
 
     ds = get_dataset(args.dataset)
+    spec = get_strategy(args.strategy)
     universe = list(ds.smoke_tickers) if args.smoke else ds.load_constituents()
     tickers = _available_tickers(universe)
-    grid = WF_HP_GRID_SMOKE if args.smoke else WF_HP_GRID_FULL
+    grid = (WF_GRID_SMOKE if args.smoke else WF_GRID_FULL)[spec.param_name]
 
-    print(f"dataset={ds.name}  tickers ({len(tickers)}): {tickers}")
+    print(f"dataset={ds.name}  strategy={spec.label}  tickers ({len(tickers)}): {tickers}")
     print(f"grid ({len(grid)} configs): {grid}")
     print(f"min trades per train fold: {args.min_trades}")
 
-    run(tickers, grid, min_trades_train=args.min_trades,
+    run(tickers, spec, grid, min_trades_train=args.min_trades,
         index_ticker=ds.index_ticker, out_dir=ds.results_dir)
 
 
