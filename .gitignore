@@ -16,4 +16,7 @@ __pycache__/
 progress.md
 CLAUDE.md
 
+scripts/extract_presentation_results.py
+scripts/make_presentation_figures.py
+
 NB_Projects.pdf
