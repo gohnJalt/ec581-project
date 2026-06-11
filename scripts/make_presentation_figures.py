@@ -7,12 +7,17 @@ clean panel each. Output overwrites presentation/figures/.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.features.hp import hp_direction_signal, rolling_hp_trend
 
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
@@ -22,6 +27,11 @@ FIG = ROOT / "presentation" / "figures"
 ACCENT = "#1f5fa8"
 WARM = "#d4762a"
 RED = "#c0392b"
+GREEN = "#2e8b57"
+
+# Phase-2 HP config (matches src/eval/strategies.py and the deck's tables).
+HP_LAM = 14400
+HP_WINDOW = 504
 
 
 def _style() -> None:
@@ -142,13 +152,63 @@ def wf_sharpe_dist() -> None:
     plt.close(fig)
 
 
+def signals() -> None:
+    """Causal HP trend with entry markers: how the S3 signal is built.
+
+    One panel for the BIST100 index (the Phase-1 tuning series) and one for a
+    representative constituent. Up triangles mark a flip to long, down triangles
+    a flip to short — each flip is simultaneously the exit of the prior position.
+    """
+    idx = pd.read_parquet(PANEL / "index.parquet")["close"].dropna()
+    prices = pd.read_parquet(PANEL / "prices.parquet")
+    name = "KCHOL.IS"
+    stock = prices[name].dropna()
+    # The signal is computed causally on the full history (HP needs the warmup),
+    # but we plot only a recent window so each entry triangle is legible —
+    # over 11 years the ~30 flips/year overplot into noise.
+    plot_start = pd.Timestamp("2024-06-01")
+
+    fig, axes = plt.subplots(2, 1, figsize=(9.4, 6.4), sharex=True)
+    for ax, series, title in [
+        (axes[0], idx, "BIST100 index (XU100.IS)"),
+        (axes[1], stock, name.replace(".IS", "")),
+    ]:
+        trend = rolling_hp_trend(series, lam=HP_LAM, window=HP_WINDOW)
+        sig = hp_direction_signal(series, lam=HP_LAM, window=HP_WINDOW)
+        # A flip is any change in the non-zero signal; place the marker on the
+        # trend at the flip date so the triangle sits on the turning point.
+        flip = sig.ne(sig.shift(1)) & sig.ne(0.0)
+        win = series.index >= plot_start
+        series, trend, flip, sig = series[win], trend[win], flip[win], sig[win]
+
+        ax.plot(series.index, series.values, color="0.6", linewidth=1.1,
+                label="price", zorder=2)
+        ax.plot(trend.index, trend.values, color=ACCENT, linewidth=2.0,
+                label=f"causal HP trend ($\\lambda$={HP_LAM:,}, win={HP_WINDOW})",
+                zorder=3)
+        longs = trend[flip & sig.gt(0)]
+        shorts = trend[flip & sig.lt(0)]
+        ax.scatter(longs.index, longs.values, marker="^", s=85, color=GREEN,
+                   edgecolor="white", linewidth=0.7, zorder=5, label="long entry")
+        ax.scatter(shorts.index, shorts.values, marker="v", s=85, color=RED,
+                   edgecolor="white", linewidth=0.7, zorder=5, label="short entry")
+        ax.set_ylabel("price")
+        ax.set_title(title)
+        ax.legend(loc="upper left", fontsize=9, ncol=2)
+    axes[1].set_xlabel("date")
+    fig.suptitle("S3 HP signal: trade the sign of the trend slope", y=0.995)
+    fig.savefig(FIG / "signals_hp.png")
+    plt.close(fig)
+
+
 def main() -> None:
     _style()
     data_overview()
     regime_scatter()
     mc_hist()
     wf_sharpe_dist()
-    print("wrote: data_overview, regime_scatter, phase2_mc_hist, wf_sharpe_dist")
+    signals()
+    print("wrote: data_overview, regime_scatter, phase2_mc_hist, wf_sharpe_dist, signals_hp")
 
 
 if __name__ == "__main__":

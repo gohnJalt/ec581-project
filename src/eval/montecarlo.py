@@ -1,4 +1,4 @@
-"""Monte Carlo Sharpe p-value test (course brief Section 1.3).
+"""Monte Carlo Sharpe p-value test.
 
 For a candidate strategy with signal series ``s`` in {-1, 0, +1}, generate
 ``n_iter`` random alternating sign series that match the empirical:

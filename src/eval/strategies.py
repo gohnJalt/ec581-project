@@ -6,7 +6,7 @@ run_phase2_portfolio) all accept ``--strategy`` and look up this table so a
 single CLI can swap S3 HP for the S4 LOWESS benchmark without duplicating
 infrastructure.
 
-Phase-1 winners (per CLAUDE.md sweep results):
+Phase-1 winners:
   - S3 HP-direction:     lam=14400,  window=504
   - S4 LOWESS-direction: frac=0.2,   window=252
 """

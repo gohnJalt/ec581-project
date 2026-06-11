@@ -1,4 +1,4 @@
-"""Walk-forward fold runner (DESIGN.md §6.3 Phase 2).
+"""Walk-forward fold runner.
 
 For each ticker we slide a (train, test) window across the full price history:
 re-pick the best parameter combination on the training slice by Sharpe, then
